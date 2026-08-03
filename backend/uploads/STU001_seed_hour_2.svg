@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+    <rect width="800" height="1000" fill="#0f172a" />
+    <rect x="40" y="40" width="720" height="920" rx="16" fill="#1e293b" stroke="#334155" stroke-width="2" />
+    <!-- Header -->
+    <rect x="40" y="40" width="720" height="100" fill="#1e1b4b" rx="16" />
+    <text x="80" y="95" font-family="system-ui, sans-serif" font-size="26" font-weight="bold" fill="#818cf8">DHRUV STAR ACADEMY - STUDY PROOF</text>
+    <text x="80" y="125" font-family="system-ui, sans-serif" font-size="16" fill="#94a3b8">Student: Rahul Sharma | Hour 2: Physics (Mechanics)</text>
+    
+    <!-- Notebook Paper Simulation -->
+    <rect x="70" y="170" width="660" height="740" rx="8" fill="#fefcbf" opacity="0.95" />
+    <!-- Red margin line -->
+    <line x1="140" y1="170" x2="140" y2="910" stroke="#f87171" stroke-width="2" />
+    <!-- Blue notebook lines -->
+    <line x1="70" y1="220" x2="730" y2="220" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="250" x2="730" y2="250" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="280" x2="730" y2="280" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="310" x2="730" y2="310" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="340" x2="730" y2="340" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="370" x2="730" y2="370" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="400" x2="730" y2="400" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="430" x2="730" y2="430" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="460" x2="730" y2="460" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="490" x2="730" y2="490" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="520" x2="730" y2="520" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="550" x2="730" y2="550" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="580" x2="730" y2="580" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="610" x2="730" y2="610" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="640" x2="730" y2="640" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="670" x2="730" y2="670" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="700" x2="730" y2="700" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="730" x2="730" y2="730" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="760" x2="730" y2="760" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="790" x2="730" y2="790" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="820" x2="730" y2="820" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+<line x1="70" y1="850" x2="730" y2="850" stroke="#93c5fd" stroke-width="1.5" opacity="0.7" />
+    
+    <!-- Simulated Handwritten Content -->
+    <text x="160" y="210" font-family="Georgia, serif" font-size="18" font-weight="bold" fill="#1e3a8a">Topic: Physics (Mechanics) Practice &amp; Key Notes</text>
+    <text x="160" y="250" font-family="monospace" font-size="16" fill="#0f172a">1. Key Theorem &amp; Derivative Formula:</text>
+    <text x="180" y="280" font-family="monospace" font-size="17" font-weight="bold" fill="#b91c1c">∫ (x³ + 4x - 7) dx = ¼ x⁴ + 2x² - 7x + C</text>
+    
+    <text x="160" y="340" font-family="monospace" font-size="16" fill="#0f172a">2. Solved Problem Set #2:</text>
+    <text x="180" y="370" font-family="monospace" font-size="15" fill="#1e293b">a) Given vector A = 3i + 4j, find magnitude |A|</text>
+    <text x="200" y="400" font-family="monospace" font-size="15" fill="#047857">|A| = √(3² + 4²) = √(9 + 16) = √25 = 5 units</text>
+    
+    <text x="160" y="460" font-family="monospace" font-size="16" fill="#0f172a">3. Summary Observations:</text>
+    <text x="180" y="490" font-family="monospace" font-size="14" fill="#334155">• Completed 15 practice problems from Chapter 4</text>
+    <text x="180" y="520" font-family="monospace" font-size="14" fill="#334155">• Reviewed previous mistakes in revision log</text>
+    <text x="180" y="550" font-family="monospace" font-size="14" fill="#334155">• Verified solutions against answer key</text>
+
+    <!-- Diagram -->
+    <rect x="180" y="590" width="380" height="200" rx="8" fill="#ffffff" stroke="#cbd5e1" stroke-width="2" />
+    <circle cx="280" cy="690" r="60" fill="none" stroke="#2563eb" stroke-width="3" />
+    <line x1="280" y1="690" x2="340" y2="690" stroke="#dc2626" stroke-width="3" />
+    <text x="295" y="680" font-family="sans-serif" font-size="14" fill="#dc2626">r = 6 cm</text>
+    <text x="380" y="650" font-family="sans-serif" font-size="15" fill="#1e293b">Area = π · r²</text>
+    <text x="380" y="680" font-family="sans-serif" font-size="15" font-weight="bold" fill="#047857">Area = 36π ≈ 113.1 cm²</text>
+    
+    <!-- Signature Stamp -->
+    <rect x="500" y="820" width="200" height="60" rx="8" fill="#dcfce7" stroke="#16a34a" stroke-width="2" />
+    <text x="515" y="845" font-family="sans-serif" font-size="13" font-weight="bold" fill="#15803d">VERIFIED SUBMISSION</text>
+    <text x="515" y="865" font-family="sans-serif" font-size="12" fill="#166534">Dhruv Star Tracker ✓</text>
+  </svg>
