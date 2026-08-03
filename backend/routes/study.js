@@ -1,6 +1,6 @@
 const express = require('express');
 const upload = require('../middleware/upload');
-const { get, run, all } = require('../db');
+const { supabase } = require('../db');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -14,27 +14,84 @@ const getTodayDateString = (customDate) => {
   return `${year}-${month}-${day}`;
 };
 
+const parseImageUrls = (raw) => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+    try { return JSON.parse(raw); } catch (e) {}
+  }
+  return [raw];
+};
+
+// Helper function to upload file buffer to Supabase Storage
+const uploadToSupabase = async (student_id, file) => {
+  const fileExt = file.originalname.split('.').pop() || 'jpg';
+  const fileName = `${student_id}/${Date.now()}-${Math.round(Math.random() * 1e9)}.${fileExt}`;
+
+  const { data, error } = await supabase.storage
+    .from('study-photos')
+    .upload(fileName, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false
+    });
+
+  if (error) {
+    console.error('Supabase upload error:', error);
+    throw new Error('Failed to upload image to storage');
+  }
+
+  const { data: urlData } = supabase.storage
+    .from('study-photos')
+    .getPublicUrl(fileName);
+
+  return urlData.publicUrl;
+};
+
 // GET /api/study/today
 router.get('/today', authenticateToken, async (req, res) => {
   try {
     const student_id = req.user.student_id;
     const date = getTodayDateString(req.query.date);
 
-    const submission = await get('SELECT * FROM study_submissions WHERE student_id = ? AND date = ?', [student_id, date]);
+    const { data: submission } = await supabase
+      .from('study_submissions')
+      .select('*')
+      .eq('student_id', student_id)
+      .eq('date', date)
+      .single();
     
     let hours = [];
     if (submission) {
-      hours = await all('SELECT * FROM study_hours WHERE submission_id = ? ORDER BY hour_number ASC', [submission.id]);
+      const { data } = await supabase
+        .from('study_hours')
+        .select('*')
+        .eq('submission_id', submission.id)
+        .order('hour_number', { ascending: true });
+      if (data) hours = data;
     } else {
-      // Also check if any partial hours were saved
-      hours = await all('SELECT * FROM study_hours WHERE student_id = ? AND date = ? ORDER BY hour_number ASC', [student_id, date]);
+      const { data } = await supabase
+        .from('study_hours')
+        .select('*')
+        .eq('student_id', student_id)
+        .eq('date', date)
+        .order('hour_number', { ascending: true });
+      if (data) hours = data;
     }
+
+    const formattedHours = hours.map(h => {
+      const urls = parseImageUrls(h.image_url);
+      return {
+        ...h,
+        image_urls: urls,
+        image_url: urls[0] || ''
+      };
+    });
 
     res.json({
       date,
       isSubmitted: !!submission,
       submission: submission || null,
-      hours: hours || []
+      hours: formattedHours
     });
   } catch (err) {
     console.error('Error fetching today study tracker:', err);
@@ -43,29 +100,36 @@ router.get('/today', authenticateToken, async (req, res) => {
 });
 
 // POST /api/study/submit
-// Expects multipart fields:
-// - subject_1, time_slot_1, image_1
-// - subject_2, time_slot_2, image_2
-// - subject_3, time_slot_3, image_3
-// - subject_4, time_slot_4, image_4
 router.post('/submit', authenticateToken, upload.fields([
-  { name: 'image_1', maxCount: 1 },
-  { name: 'image_2', maxCount: 1 },
-  { name: 'image_3', maxCount: 1 },
-  { name: 'image_4', maxCount: 1 }
+  { name: 'image_1', maxCount: 25 },
+  { name: 'image_2', maxCount: 25 },
+  { name: 'image_3', maxCount: 25 },
+  { name: 'image_4', maxCount: 25 }
 ]), async (req, res) => {
   try {
     const student_id = req.user.student_id;
     const date = getTodayDateString(req.body.date);
 
     // Check if already submitted today
-    const existingSubmission = await get('SELECT * FROM study_submissions WHERE student_id = ? AND date = ?', [student_id, date]);
+    const { data: existingSubmission } = await supabase
+      .from('study_submissions')
+      .select('*')
+      .eq('student_id', student_id)
+      .eq('date', date)
+      .single();
+
     if (existingSubmission) {
       return res.status(400).json({ error: 'You have already submitted your 4-hour study tracker for today.' });
     }
 
     // Verify attendance has been marked
-    const attendance = await get('SELECT * FROM attendance WHERE student_id = ? AND date = ?', [student_id, date]);
+    const { data: attendance } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('student_id', student_id)
+      .eq('date', date)
+      .single();
+
     if (!attendance || attendance.status !== 'PRESENT') {
       return res.status(400).json({ error: 'You must mark morning attendance before submitting your study tracker.' });
     }
@@ -84,41 +148,72 @@ router.post('/submit', authenticateToken, upload.fields([
         return res.status(400).json({ error: `Study time for Hour ${h} is required.` });
       }
       if (!fileArr || fileArr.length === 0) {
-        return res.status(400).json({ error: `Upload image proof for Hour ${h} is required.` });
+        return res.status(400).json({ error: `Upload at least one image proof for Hour ${h}.` });
       }
 
-      const imageUrl = `/uploads/${fileArr[0].filename}`;
+      // Upload files to Supabase Storage
+      const uploadedUrls = [];
+      for (const file of fileArr) {
+        const publicUrl = await uploadToSupabase(student_id, file);
+        uploadedUrls.push(publicUrl);
+      }
+
+      const storedImageValue = JSON.stringify(uploadedUrls);
+
       hoursData.push({
         hour_number: h,
         subject: subject.trim(),
         time_slot: time_slot.trim(),
-        image_url: imageUrl
+        image_url: storedImageValue
       });
     }
 
     // Create main submission
-    const result = await run(
-      'INSERT INTO study_submissions (student_id, date, status) VALUES (?, ?, ?)',
-      [student_id, date, 'COMPLETED']
-    );
-    const submissionId = result.lastID;
+    const { data: submissionData, error: subErr } = await supabase
+      .from('study_submissions')
+      .insert({ student_id, date, status: 'COMPLETED' })
+      .select()
+      .single();
+
+    if (subErr) throw subErr;
+    const submissionId = submissionData.id;
 
     // Insert 4 hour entries
     for (const hData of hoursData) {
-      await run(
-        `INSERT INTO study_hours (submission_id, student_id, date, hour_number, subject, time_slot, image_url)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [submissionId, student_id, date, hData.hour_number, hData.subject, hData.time_slot, hData.image_url]
-      );
+      const { error: hErr } = await supabase
+        .from('study_hours')
+        .insert({
+          submission_id: submissionId,
+          student_id,
+          date,
+          hour_number: hData.hour_number,
+          subject: hData.subject,
+          time_slot: hData.time_slot,
+          image_url: hData.image_url
+        });
+      if (hErr) throw hErr;
     }
 
-    const savedHours = await all('SELECT * FROM study_hours WHERE submission_id = ? ORDER BY hour_number ASC', [submissionId]);
+    const { data: savedHours } = await supabase
+      .from('study_hours')
+      .select('*')
+      .eq('submission_id', submissionId)
+      .order('hour_number', { ascending: true });
+
+    const formattedSavedHours = (savedHours || []).map(h => {
+      const urls = parseImageUrls(h.image_url);
+      return {
+        ...h,
+        image_urls: urls,
+        image_url: urls[0] || ''
+      };
+    });
 
     res.json({
       message: 'All 4 study hours successfully submitted for today!',
       submission_id: submissionId,
       date,
-      hours: savedHours
+      hours: formattedSavedHours
     });
   } catch (err) {
     console.error('Error submitting study hours:', err);

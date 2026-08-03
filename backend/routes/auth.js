@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { get, run, all } = require('../db');
+const { supabase } = require('../db');
 const { JWT_SECRET, authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -16,9 +16,13 @@ router.post('/login', async (req, res) => {
     }
 
     const cleanId = student_id.trim().toUpperCase();
-    const user = await get('SELECT * FROM users WHERE UPPER(student_id) = ?', [cleanId]);
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('*')
+      .ilike('student_id', cleanId)
+      .single();
 
-    if (!user) {
+    if (error || !user) {
       return res.status(401).json({ error: 'Invalid ID or password' });
     }
 
@@ -50,8 +54,13 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/me
 router.get('/me', authenticateToken, async (req, res) => {
   try {
-    const user = await get('SELECT id, student_id, name, role FROM users WHERE id = ?', [req.user.id]);
-    if (!user) {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id, student_id, name, role')
+      .eq('id', req.user.id)
+      .single();
+
+    if (error || !user) {
       return res.status(404).json({ error: 'User not found' });
     }
     res.json({ user });

@@ -5,26 +5,24 @@ import StatusBadge from '../components/StatusBadge';
 import ImageModal from '../components/ImageModal';
 import confetti from 'canvas-confetti';
 import { 
-  Sun, Moon, CheckCircle2, Clock, Upload, BookOpen, 
-  Sparkles, AlertCircle, FileCheck, Image as ImageIcon, Check, X
+  Sun, CheckCircle2, Clock, Upload, BookOpen, 
+  Sparkles, AlertCircle, FileCheck, Check, X
 } from 'lucide-react';
 
 const SUBJECT_OPTIONS = [
-  'Mathematics (Calculus)',
-  'Physics (Mechanics & Optics)',
-  'Chemistry (Organic & Physical)',
-  'Biology (Genetics & Botany)',
-  'Computer Science & Coding',
-  'English Literature',
-  'History & Social Sciences',
-  'Self Study / Revision'
-];
-
-const TIME_SLOT_PRESETS = [
-  { morning: true, slot: '05:30 AM - 06:30 AM' },
-  { morning: true, slot: '06:30 AM - 07:30 AM' },
-  { morning: false, slot: '09:00 PM - 10:00 PM' },
-  { morning: false, slot: '10:00 PM - 11:00 PM' }
+  'Mathematics',
+  'Science',
+  'Physics',
+  'Chemistry',
+  'Biology',
+  'Social',
+  'Kannada',
+  'Hindi',
+  'English',
+  'Self Study',
+  'Notes Completion',
+  'Project',
+  'Exam Preparation'
 ];
 
 export const StudentDashboard = () => {
@@ -39,12 +37,12 @@ export const StudentDashboard = () => {
   const [studyError, setStudyError] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
 
-  // Form state for 4 hours
+  // Form state for 4 hours (now supporting multiple files)
   const [formHours, setFormHours] = useState({
-    1: { subject: 'Mathematics (Calculus)', time_slot: '05:30 AM - 06:30 AM', file: null, preview: null },
-    2: { subject: 'Physics (Mechanics & Optics)', time_slot: '06:30 AM - 07:30 AM', file: null, preview: null },
-    3: { subject: 'Chemistry (Organic & Physical)', time_slot: '09:00 PM - 10:00 PM', file: null, preview: null },
-    4: { subject: 'English Literature', time_slot: '10:00 PM - 11:00 PM', file: null, preview: null }
+    1: { subject: 'Mathematics (Calculus)', time_slot: '05:30 AM - 06:30 AM', files: [], previews: [] },
+    2: { subject: 'Physics (Mechanics & Optics)', time_slot: '06:30 AM - 07:30 AM', files: [], previews: [] },
+    3: { subject: 'Chemistry (Organic & Physical)', time_slot: '09:00 PM - 10:00 PM', files: [], previews: [] },
+    4: { subject: 'English Literature', time_slot: '10:00 PM - 11:00 PM', files: [], previews: [] }
   });
 
   const fetchData = async () => {
@@ -82,19 +80,6 @@ export const StudentDashboard = () => {
     }
   };
 
-  const handleFileChange = (hNum, file) => {
-    if (!file) return;
-    const previewUrl = URL.createObjectURL(file);
-    setFormHours(prev => ({
-      ...prev,
-      [hNum]: {
-        ...prev[hNum],
-        file,
-        preview: previewUrl
-      }
-    }));
-  };
-
   const handleInputChange = (hNum, field, val) => {
     setFormHours(prev => ({
       ...prev,
@@ -105,11 +90,40 @@ export const StudentDashboard = () => {
     }));
   };
 
+  const handleFileChange = (hNum, selectedFileList) => {
+    if (!selectedFileList || selectedFileList.length === 0) return;
+    const selectedFiles = Array.from(selectedFileList);
+
+    const currentFiles = formHours[hNum].files || [];
+    const newFiles = [...currentFiles, ...selectedFiles].slice(0, 25);
+    const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+
+    setFormHours(prev => ({
+      ...prev,
+      [hNum]: {
+        ...prev[hNum],
+        files: newFiles,
+        previews: newPreviews
+      }
+    }));
+  };
+
+  const removeFile = (hNum, indexToRemove) => {
+    setFormHours(prev => {
+      const hState = prev[hNum];
+      const newFiles = hState.files.filter((_, i) => i !== indexToRemove);
+      const newPreviews = hState.previews.filter((_, i) => i !== indexToRemove);
+      return {
+        ...prev,
+        [hNum]: { ...hState, files: newFiles, previews: newPreviews }
+      };
+    });
+  };
+
   const handleStudySubmit = async (e) => {
     e.preventDefault();
     setStudyError('');
 
-    // Check all 4 entries
     for (let h = 1; h <= 4; h++) {
       if (!formHours[h].subject) {
         setStudyError(`Please select a subject for Hour ${h}.`);
@@ -119,8 +133,8 @@ export const StudentDashboard = () => {
         setStudyError(`Please specify the study time for Hour ${h}.`);
         return;
       }
-      if (!formHours[h].file) {
-        setStudyError(`Please upload image proof of completed work for Hour ${h}.`);
+      if (!formHours[h].files || formHours[h].files.length === 0) {
+        setStudyError(`Please upload at least one image proof of completed work for Hour ${h}.`);
         return;
       }
     }
@@ -131,7 +145,9 @@ export const StudentDashboard = () => {
       for (let h = 1; h <= 4; h++) {
         formData.append(`subject_${h}`, formHours[h].subject);
         formData.append(`time_slot_${h}`, formHours[h].time_slot);
-        formData.append(`image_${h}`, formHours[h].file);
+        if (formHours[h].files) {
+          formHours[h].files.forEach(f => formData.append(`image_${h}`, f));
+        }
       }
 
       await api.post('/study/submit', formData, {
@@ -156,8 +172,8 @@ export const StudentDashboard = () => {
     return (
       <div className="min-h-[70vh] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-          <span className="text-sm font-medium text-slate-400">Loading student profile &amp; study logs...</span>
+          <div className="w-10 h-10 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
+          <span className="text-sm font-medium text-slate-500">Loading student profile &amp; study logs...</span>
         </div>
       </div>
     );
@@ -172,29 +188,29 @@ export const StudentDashboard = () => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
       {/* Welcome Banner */}
-      <div className="glass-card rounded-2xl p-6 border border-slate-800 flex flex-wrap items-center justify-between gap-4 relative overflow-hidden">
-        <div className="space-y-1 z-10">
-          <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-amber-400 bg-amber-950/60 border border-amber-500/30 px-3 py-1 rounded-full">
+      <div className="clean-card p-6 flex flex-wrap items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Dhruv Star Academy • Student Dashboard</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white">
-            Welcome back, <span className="text-indigo-400">{user?.name}</span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            Welcome back, <span className="text-blue-600">{user?.name}</span>
           </h1>
-          <p className="text-sm text-slate-400">
-            Student ID: <span className="font-mono text-slate-200 font-bold">{user?.student_id}</span> • Date: <span className="font-mono text-indigo-300">{attendance?.date}</span>
+          <p className="text-sm text-slate-500">
+            Student ID: <span className="font-mono text-slate-900 font-bold">{user?.student_id}</span> • Date: <span className="font-mono text-blue-700 font-medium">{attendance?.date}</span>
           </p>
         </div>
 
-        <div className="flex items-center gap-3 z-10">
+        <div className="flex items-center gap-4">
           <div className="text-right">
-            <div className="text-xs text-slate-400 uppercase tracking-wider">Attendance Status</div>
+            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Attendance Status</div>
             <div className="mt-1">
               <StatusBadge status={attendance?.status} type="attendance" />
             </div>
           </div>
-          <div className="text-right pl-4 border-l border-slate-800">
-            <div className="text-xs text-slate-400 uppercase tracking-wider">Study Tracker</div>
+          <div className="text-right pl-4 border-l border-slate-200">
+            <div className="text-xs text-slate-400 font-bold uppercase tracking-wider">Study Tracker</div>
             <div className="mt-1">
               <StatusBadge status={studyData.isSubmitted ? 'Submitted' : 'Pending'} type="study" />
             </div>
@@ -202,24 +218,24 @@ export const StudentDashboard = () => {
         </div>
       </div>
 
-      {/* SECTION 1: MORNING ATTENDANCE (4:30 AM - 5:30 AM) */}
-      <section className="space-y-4">
+      {/* SECTION 1: MORNING ATTENDANCE */}
+      <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-950 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 font-bold">
               <Sun className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">1. Morning Attendance</h2>
-              <p className="text-xs text-slate-400">Mandatory window: 4:30 AM – 5:30 AM daily</p>
+              <h2 className="text-lg font-bold text-slate-900">1. Morning Attendance</h2>
+              <p className="text-xs text-slate-500">Mandatory window: 4:30 AM – 5:30 AM daily</p>
             </div>
           </div>
-          <span className="text-xs font-mono text-slate-400">Step 1 of 2</span>
+          <span className="text-xs font-mono text-slate-400 font-medium">Step 1 of 2</span>
         </div>
 
-        <div className="glass-card rounded-2xl p-6 border border-slate-800 relative overflow-hidden">
+        <div className="clean-card p-6">
           {attError && (
-            <div className="mb-4 p-3 rounded-lg bg-rose-950/80 border border-rose-500/40 text-rose-300 text-xs flex items-center gap-2">
+            <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span>{attError}</span>
             </div>
@@ -228,59 +244,59 @@ export const StudentDashboard = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
             
             {/* Clock & Timing Info */}
-            <div className="space-y-2">
-              <div className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Attendance Window</div>
+            <div className="space-y-1.5">
+              <div className="text-xs text-slate-400 uppercase tracking-wider font-bold">Attendance Window</div>
               <div className="flex items-center gap-2">
-                <Clock className="w-5 h-5 text-amber-400" />
-                <span className="text-xl font-bold font-mono text-white">04:30 AM – 05:30 AM</span>
+                <Clock className="w-5 h-5 text-amber-600" />
+                <span className="text-xl font-bold font-mono text-slate-900">04:30 AM – 05:30 AM</span>
               </div>
-              <div className="text-xs text-slate-400">
-                Current System Time: <span className="font-mono text-indigo-300 font-bold">{windowInfo?.timeFormatted}</span>
+              <div className="text-xs text-slate-500">
+                Current System Time: <span className="font-mono text-slate-900 font-bold">{windowInfo?.timeFormatted}</span>
               </div>
             </div>
 
             {/* Status Message */}
-            <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
               {isAttRecorded ? (
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-emerald-400">Attendance Recorded</div>
-                    <div className="text-xs text-slate-400">
-                      Marked at <span className="font-mono text-slate-200">{attendance.record.time}</span> on {attendance.record.date}
+                    <div className="text-sm font-bold text-emerald-800">Attendance Recorded</div>
+                    <div className="text-xs text-slate-600">
+                      Marked at <span className="font-mono font-bold text-slate-900">{attendance.record.time}</span> on {attendance.record.date}
                     </div>
                   </div>
                 </div>
               ) : isAttWindowOpen ? (
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-amber-950 border border-amber-500/40 flex items-center justify-center text-amber-400 animate-pulse">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 animate-pulse">
                     <Clock className="w-6 h-6" />
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-amber-400">Window Open Now</div>
-                    <div className="text-xs text-slate-400">Please click the button to record today's attendance.</div>
+                    <div className="text-sm font-bold text-amber-800">Window Open Now</div>
+                    <div className="text-xs text-slate-600">Please click the button to record today's attendance.</div>
                   </div>
                 </div>
               ) : isAttWindowClosed ? (
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-rose-950 border border-rose-500/40 flex items-center justify-center text-rose-400">
+                  <div className="w-10 h-10 rounded-full bg-rose-100 border border-rose-200 flex items-center justify-center text-rose-700">
                     <X className="w-6 h-6" />
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-rose-400">Window Closed • Marked Absent</div>
-                    <div className="text-xs text-slate-400">Morning attendance closed at 5:30 AM.</div>
+                    <div className="text-sm font-bold text-rose-800">Window Closed • Marked Absent</div>
+                    <div className="text-xs text-slate-600">Morning attendance closed at 5:30 AM.</div>
                   </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-indigo-950 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-700">
                     <Clock className="w-6 h-6" />
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-indigo-300">Upcoming Window</div>
-                    <div className="text-xs text-slate-400">Opens at 04:30 AM tomorrow morning.</div>
+                    <div className="text-sm font-bold text-blue-900">Upcoming Window</div>
+                    <div className="text-xs text-slate-600">Opens at 04:30 AM tomorrow morning.</div>
                   </div>
                 </div>
               )}
@@ -291,19 +307,19 @@ export const StudentDashboard = () => {
               {isAttRecorded ? (
                 <button
                   disabled
-                  className="w-full lg:w-auto px-6 py-3 rounded-xl bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 text-sm font-bold flex items-center justify-center gap-2 cursor-not-allowed"
+                  className="w-full lg:w-auto px-6 py-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-bold flex items-center justify-center gap-2 cursor-not-allowed"
                 >
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>Attendance Verified</span>
                 </button>
               ) : (
                 <button
                   onClick={handleMarkAttendance}
                   disabled={markingAtt || (!isAttWindowOpen && !simulatedTime)}
-                  className={`w-full lg:w-auto px-8 py-3.5 rounded-xl font-bold text-sm text-white shadow-xl transition flex items-center justify-center gap-2 ${
+                  className={`w-full lg:w-auto px-8 py-3.5 rounded-xl font-bold text-sm text-white shadow-md transition flex items-center justify-center gap-2 ${
                     isAttWindowOpen || simulatedTime
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-900/40 glow-green cursor-pointer'
-                      : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                      ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer'
+                      : 'bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed'
                   }`}
                 >
                   {markingAtt ? (
@@ -323,23 +339,23 @@ export const StudentDashboard = () => {
       </section>
 
       {/* SECTION 2: DAILY 4-HOUR STUDY TRACKER */}
-      <section className="space-y-4">
+      <section className="space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-indigo-950 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-bold">
               <BookOpen className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">2. Daily Self-Study Tracker</h2>
-              <p className="text-xs text-slate-400">
+              <h2 className="text-lg font-bold text-slate-900">2. Daily Self-Study Tracker</h2>
+              <p className="text-xs text-slate-500">
                 4 compulsory hours required (2 Morning sessions + 2 Night sessions)
               </p>
             </div>
           </div>
           
-          <div className="flex items-center gap-2 bg-slate-950/80 px-3 py-1.5 rounded-xl border border-slate-800 text-xs font-mono">
-            <span className="text-slate-400">Progress:</span>
-            <span className="text-indigo-400 font-bold">
+          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono">
+            <span className="text-slate-500">Progress:</span>
+            <span className="text-blue-700 font-bold">
               {studyData.isSubmitted ? '4 / 4 Complete' : `${Object.values(formHours).filter(h => h.file).length} / 4 Proofs Attached`}
             </span>
           </div>
@@ -347,12 +363,12 @@ export const StudentDashboard = () => {
 
         {/* STUDY SUBMITTED VIEW */}
         {studyData.isSubmitted ? (
-          <div className="glass-card rounded-2xl p-6 border border-emerald-500/30 space-y-6">
-            <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/30 flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400 shrink-0" />
+          <div className="clean-card p-6 space-y-6">
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
+              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
               <div>
-                <h3 className="text-sm font-bold text-emerald-300">Daily Study Tracker Submitted Successfully!</h3>
-                <p className="text-xs text-slate-300">
+                <h3 className="text-sm font-bold text-emerald-900">Daily Study Tracker Submitted Successfully!</h3>
+                <p className="text-xs text-emerald-700">
                   All 4 compulsory study hours for today have been verified and submitted to your teacher.
                 </p>
               </div>
@@ -363,27 +379,27 @@ export const StudentDashboard = () => {
                 <div 
                   key={h.id}
                   onClick={() => setSelectedImage(h)}
-                  className="bg-slate-950/90 border border-slate-800 hover:border-indigo-500/50 rounded-xl p-4 space-y-3 cursor-pointer group transition"
+                  className="bg-white border border-slate-200 hover:border-blue-400 rounded-xl p-4 space-y-3 cursor-pointer group transition shadow-xs hover:shadow-md"
                 >
                   <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-amber-400 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/30">
+                    <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                       Hour {h.hour_number}
                     </span>
-                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Submitted
+                    <span className="text-emerald-700 font-bold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" /> Submitted
                     </span>
                   </div>
 
                   <div>
-                    <div className="text-sm font-bold text-white group-hover:text-indigo-300 transition">{h.subject}</div>
-                    <div className="text-xs text-slate-400 flex items-center gap-1 mt-1 font-mono">
-                      <Clock className="w-3 h-3 text-indigo-400" /> {h.time_slot}
+                    <div className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition">{h.subject}</div>
+                    <div className="text-xs text-slate-500 flex items-center gap-1 mt-1 font-mono">
+                      <Clock className="w-3 h-3 text-slate-400" /> {h.time_slot}
                     </div>
                   </div>
 
-                  <div className="relative aspect-video bg-slate-900 rounded-lg overflow-hidden border border-slate-800 group-hover:border-indigo-500/40">
+                  <div className="relative aspect-video bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group-hover:border-blue-300">
                     <img src={h.image_url} alt={`Hour ${h.hour_number}`} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-xs font-semibold text-white">
+                    <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-xs font-semibold text-white">
                       <span>Click to view proof</span>
                     </div>
                   </div>
@@ -395,8 +411,8 @@ export const StudentDashboard = () => {
           /* FORM VIEW FOR 4 COMPULSORY HOURS */
           <form onSubmit={handleStudySubmit} className="space-y-6">
             {!isAttPresent && (
-              <div className="p-4 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-300 text-xs sm:text-sm flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 shrink-0 text-amber-400" />
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 shrink-0 text-amber-600" />
                 <span>
                   <strong>Notice:</strong> Please mark your morning attendance first to enable final submission.
                 </span>
@@ -404,8 +420,8 @@ export const StudentDashboard = () => {
             )}
 
             {studyError && (
-              <div className="p-4 rounded-xl bg-rose-950/80 border border-rose-500/40 text-rose-300 text-xs sm:text-sm flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs sm:text-sm flex items-center gap-3">
+                <AlertCircle className="w-5 h-5 shrink-0 text-rose-600" />
                 <span>{studyError}</span>
               </div>
             )}
@@ -418,30 +434,30 @@ export const StudentDashboard = () => {
                 return (
                   <div 
                     key={hNum} 
-                    className="glass-card glass-card-hover rounded-2xl p-5 border border-slate-800 space-y-4 relative"
+                    className="clean-card clean-card-hover p-5 space-y-4"
                   >
                     {/* Header of Card */}
-                    <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                       <div className="flex items-center gap-2">
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${
-                          isMorning ? 'bg-amber-950 text-amber-400 border border-amber-500/30' : 'bg-indigo-950 text-indigo-400 border border-indigo-500/30'
+                          isMorning ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
                         }`}>
                           H{hNum}
                         </div>
                         <div>
-                          <span className="text-sm font-bold text-white">Hour {hNum} Study Entry</span>
-                          <span className="text-[11px] text-slate-400 ml-2">
+                          <span className="text-sm font-bold text-slate-900">Hour {hNum} Study Entry</span>
+                          <span className="text-[11px] text-slate-500 ml-2">
                             ({isMorning ? 'Morning Session' : 'Night Session'})
                           </span>
                         </div>
                       </div>
 
-                      {hState.file ? (
-                        <span className="text-xs font-semibold text-emerald-400 bg-emerald-950/80 border border-emerald-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                          <Check className="w-3.5 h-3.5" /> Proof Attached
+                      {hState.files && hState.files.length > 0 ? (
+                        <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                          <Check className="w-3.5 h-3.5" /> {hState.files.length} Photo{hState.files.length > 1 ? 's' : ''}
                         </span>
                       ) : (
-                        <span className="text-xs font-semibold text-rose-400 bg-rose-950/80 border border-rose-500/30 px-2.5 py-0.5 rounded-full">
+                        <span className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full shadow-sm">
                           Required
                         </span>
                       )}
@@ -449,7 +465,7 @@ export const StudentDashboard = () => {
 
                     {/* Subject Select */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                         Select Subject *
                       </label>
                       <select
@@ -459,7 +475,7 @@ export const StudentDashboard = () => {
                         className="w-full corporate-select text-sm"
                       >
                         {SUBJECT_OPTIONS.map((sub) => (
-                          <option key={sub} value={sub} className="bg-slate-900 text-white">
+                          <option key={sub} value={sub}>
                             {sub}
                           </option>
                         ))}
@@ -468,7 +484,7 @@ export const StudentDashboard = () => {
 
                     {/* Time Slot Input */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                         Study Time (e.g. 5:30 AM–6:30 AM) *
                       </label>
                       <input
@@ -483,37 +499,51 @@ export const StudentDashboard = () => {
 
                     {/* Image Upload Area */}
                     <div>
-                      <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
-                        Upload Completed Work Photo *
-                      </label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                          Upload Completed Work Photos *
+                        </label>
+                        {hState.files && hState.files.length > 0 && (
+                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                            {hState.files.length} / 25
+                          </span>
+                        )}
+                      </div>
 
-                      {hState.preview ? (
-                        <div className="relative rounded-xl overflow-hidden border border-emerald-500/40 bg-slate-950 p-2 flex items-center gap-3">
-                          <img src={hState.preview} alt={`Hour ${hNum}`} className="w-16 h-16 object-cover rounded-lg border border-slate-800" />
-                          <div className="flex-1 min-w-0">
-                            <div className="text-xs font-bold text-white truncate">{hState.file.name}</div>
-                            <div className="text-[11px] text-slate-400">{(hState.file.size / 1024).toFixed(1)} KB</div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setFormHours(prev => ({ ...prev, [hNum]: { ...prev[hNum], file: null, preview: null } }))}
-                            className="p-1.5 bg-rose-950 text-rose-300 hover:bg-rose-900 rounded-lg text-xs"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                      {/* Thumbnail Grid for Uploaded Photos */}
+                      {hState.files && hState.files.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-3 bg-slate-50 p-2 rounded-xl border border-slate-200">
+                          {hState.previews.map((prevUrl, idx) => (
+                            <div key={idx} className="relative group rounded-lg overflow-hidden border border-slate-300 w-16 h-16 shadow-sm">
+                              <img src={prevUrl} alt={`Preview ${idx+1}`} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeFile(hNum, idx)}
+                                className="absolute inset-0 bg-slate-900/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                              >
+                                <div className="w-6 h-6 bg-rose-500 rounded-full flex items-center justify-center text-white shadow">
+                                  <X className="w-3.5 h-3.5" />
+                                </div>
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ) : (
-                        <label className="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer bg-slate-950/40 hover:bg-slate-950/80 transition group">
-                          <Upload className="w-6 h-6 text-slate-400 group-hover:text-indigo-400 transition" />
+                      )}
+
+                      {/* Upload Button */}
+                      {(!hState.files || hState.files.length < 25) && (
+                        <label className="border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl p-4 flex flex-col items-center justify-center gap-2 cursor-pointer bg-slate-50 hover:bg-blue-50/30 transition group">
+                          <Upload className="w-6 h-6 text-slate-400 group-hover:text-blue-600 transition" />
                           <div className="text-center">
-                            <span className="text-xs font-semibold text-indigo-400 group-hover:underline">Click to upload photo</span>
-                            <span className="text-xs text-slate-500 block">PNG, JPG, WEBP up to 10MB</span>
+                            <span className="text-xs font-semibold text-blue-600 group-hover:underline">Click to upload photos (Multiple allowed)</span>
+                            <span className="text-xs text-slate-400 block mt-0.5">PNG, JPG, WEBP up to 25 photos per slot</span>
                           </div>
                           <input
                             type="file"
                             accept="image/*"
-                            required
-                            onChange={(e) => handleFileChange(hNum, e.target.files[0])}
+                            multiple
+                            required={!hState.files || hState.files.length === 0}
+                            onChange={(e) => handleFileChange(hNum, e.target.files)}
                             className="hidden"
                           />
                         </label>
@@ -525,16 +555,16 @@ export const StudentDashboard = () => {
               })}
             </div>
 
-            {/* Submit All 4 Hours Button */}
-            <div className="glass-card rounded-2xl p-6 border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="text-xs text-slate-400">
-                <span className="text-amber-400 font-bold">Rule:</span> All 4 study hours must be completed with uploaded images before final submission. Only 1 submission allowed per day.
+            {/* Submit Button */}
+            <div className="clean-card p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-xs text-slate-500">
+                <span className="text-amber-800 font-bold">Rule:</span> All 4 study hours must be completed with uploaded images before final submission.
               </div>
 
               <button
                 type="submit"
                 disabled={submittingStudy || !isAttPresent}
-                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-xl shadow-indigo-900/40 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {submittingStudy ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

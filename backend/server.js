@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { initDb } = require('./db');
+const { initDb, supabase } = require('./db');
 
 const authRoutes = require('./routes/auth');
 const attendanceRoutes = require('./routes/attendance');
@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static uploaded study proof images
+// Serve static uploaded study proof images (still here for backwards compatibility if needed)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
@@ -43,12 +43,19 @@ app.get('/api/health', (req, res) => {
 
 // Initialize database and start server
 initDb().then(async () => {
-  // Auto-seed if database has no users
-  const { get } = require('./db');
-  const userCount = await get('SELECT COUNT(*) as count FROM users');
-  if (!userCount || userCount.count === 0) {
-    console.log('No users found. Running initial seed...');
-    await seed();
+  // Check if users exist in Supabase
+  try {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('id')
+      .limit(1);
+      
+    if (!error && (!users || users.length === 0)) {
+      console.log('No users found in Supabase. You may need to run the seed script after creating tables.');
+      // Optionally await seed(); but we'll wait for the user to create tables first via SQL editor
+    }
+  } catch (err) {
+    console.error('Could not check users table. Did you run schema.sql in Supabase SQL editor?');
   }
 
   app.listen(PORT, () => {
@@ -56,7 +63,10 @@ initDb().then(async () => {
     console.log(`⭐ Dhruv Star Study Tracker Backend Server`);
     console.log(`🚀 Server running on http://localhost:${PORT}`);
     console.log(`=======================================================`);
+    
+    // Initialize scheduled cron jobs
+    require('./cron');
   });
 }).catch(err => {
-  console.error('Failed to initialize database:', err);
+  console.error('Failed to initialize server:', err);
 });

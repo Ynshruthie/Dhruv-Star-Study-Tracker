@@ -11,10 +11,10 @@ const AppContent = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"></div>
-          <p className="text-sm text-slate-400 font-medium tracking-wide">
+          <div className="w-12 h-12 border-4 border-blue-600/20 border-t-blue-600 rounded-full animate-spin"></div>
+          <p className="text-sm text-slate-500 font-medium tracking-wide">
             Initializing Dhruv Star Study Tracker...
           </p>
         </div>
@@ -23,7 +23,7 @@ const AppContent = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans">
       <TimeBanner />
       <Navbar />
 
@@ -37,7 +37,7 @@ const AppContent = () => {
         )}
       </main>
 
-      <footer className="border-t border-slate-800/80 py-4 px-6 text-center text-xs text-slate-500 bg-slate-950/60">
+      <footer className="border-t border-slate-200 py-4 px-6 text-center text-xs text-slate-500 bg-white">
         <p>⭐ Dhruv Star Academy • Daily Attendance &amp; 4-Hour Self-Study Tracker © 2026</p>
       </footer>
     </div>

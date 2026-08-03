@@ -1,5 +1,5 @@
 const express = require('express');
-const { get, run, all } = require('../db');
+const { supabase } = require('../db');
 const { authenticateToken, enforceStudentScope } = require('../middleware/auth');
 
 const router = express.Router();
@@ -53,7 +53,13 @@ router.get('/today', authenticateToken, async (req, res) => {
     const simTime = req.headers['x-simulated-time'] || req.query.simulated_time;
 
     const windowInfo = checkAttendanceWindow(null, simTime);
-    const record = await get('SELECT * FROM attendance WHERE student_id = ? AND date = ?', [student_id, date]);
+    
+    const { data: record, error } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('student_id', student_id)
+      .eq('date', date)
+      .single();
 
     let calculatedStatus = 'PENDING';
     if (record) {
@@ -84,7 +90,13 @@ router.post('/mark', authenticateToken, async (req, res) => {
     const isBypass = req.body.bypass_window === true;
 
     // Check existing attendance record
-    const existing = await get('SELECT * FROM attendance WHERE student_id = ? AND date = ?', [student_id, date]);
+    const { data: existing } = await supabase
+      .from('attendance')
+      .select('*')
+      .eq('student_id', student_id)
+      .eq('date', date)
+      .single();
+
     if (existing) {
       return res.status(400).json({
         error: 'Attendance has already been recorded for today.',
@@ -108,12 +120,13 @@ router.post('/mark', authenticateToken, async (req, res) => {
       ? `${simTime} ${parseInt(simTime.split(':')[0], 10) >= 12 ? 'PM' : 'AM'}`
       : now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    await run(
-      'INSERT INTO attendance (student_id, date, time, status) VALUES (?, ?, ?, ?)',
-      [student_id, date, displayTime, 'PRESENT']
-    );
+    const { data: newRecord, error } = await supabase
+      .from('attendance')
+      .insert({ student_id, date, time: displayTime, status: 'PRESENT' })
+      .select()
+      .single();
 
-    const newRecord = await get('SELECT * FROM attendance WHERE student_id = ? AND date = ?', [student_id, date]);
+    if (error) throw error;
 
     res.json({
       message: 'Attendance marked successfully!',
