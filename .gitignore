@@ -3,4 +3,10 @@ backend/data/
 backend/uploads/
 frontend/dist/
 .env
+backend/.env
 .DS_Store
+
+# Sensitive one-off scripts
+backend/fix_teacher.js
+backend/check_users.js
+backend/seed.js
