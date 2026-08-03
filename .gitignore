@@ -11,4 +11,3 @@ backend/.env.backup
 # Sensitive one-off scripts
 backend/fix_teacher.js
 backend/check_users.js
-backend/seed.js
