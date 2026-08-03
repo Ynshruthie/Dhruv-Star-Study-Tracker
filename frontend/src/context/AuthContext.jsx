@@ -21,7 +21,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const checkAuth = async () => {
-    const token = localStorage.getItem('dhruv_token');
+    const legacyToken = localStorage.getItem('token');
+    const token = localStorage.getItem('dhruv_token') || legacyToken;
+
+    if (legacyToken && !localStorage.getItem('dhruv_token')) {
+      localStorage.setItem('dhruv_token', legacyToken);
+    }
+
     if (!token) {
       setUser(null);
       setLoading(false);

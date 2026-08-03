@@ -1,9 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { ShieldCheck, GraduationCap, ArrowRight, AlertCircle, UserPlus, LogIn, CheckCircle } from 'lucide-react';
-import axios from 'axios';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
+import api from '../utils/api';
 
 export const LoginPage = () => {
   const { login } = useContext(AuthContext);
@@ -58,7 +56,7 @@ export const LoginPage = () => {
 
     setLoading(true);
     try {
-      const { data } = await axios.post(`${API}/auth/teacher-signup`, {
+      const { data } = await api.post('/auth/teacher-signup', {
         name: signupName,
         teacher_id: signupTeacherId,
         password: signupPassword,
@@ -66,7 +64,7 @@ export const LoginPage = () => {
       });
 
       // Auto-login after signup
-      localStorage.setItem('token', data.token);
+      localStorage.setItem('dhruv_token', data.token);
       window.location.reload();
     } catch (err) {
       setError(err.response?.data?.error || 'Sign up failed. Please try again.');
