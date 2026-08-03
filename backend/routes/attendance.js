@@ -87,7 +87,6 @@ router.post('/mark', authenticateToken, async (req, res) => {
     const student_name = req.user.name;
     const date = getTodayDateString(req.body.date);
     const simTime = req.headers['x-simulated-time'] || req.body.simulated_time;
-    const isBypass = req.body.bypass_window === true;
 
     // Check existing attendance record
     const { data: existing } = await supabase
@@ -104,10 +103,11 @@ router.post('/mark', authenticateToken, async (req, res) => {
       });
     }
 
-    // Check time window unless bypass flag or simulated time is inside window
+    // Enforce attendance window strictly. A student must mark during the allowed window;
+    // otherwise they remain absent for the day.
     const windowInfo = checkAttendanceWindow(null, simTime);
 
-    if (!windowInfo.isOpen && !isBypass && !simTime) {
+    if (!windowInfo.isOpen) {
       return res.status(400).json({
         error: `Morning attendance is only allowed from 4:30 AM to 5:30 AM. Current time: ${windowInfo.timeFormatted}`,
         window: windowInfo

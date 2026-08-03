@@ -3,7 +3,9 @@ backend/data/
 backend/uploads/
 frontend/dist/
 .env
+.env.backup
 backend/.env
+backend/.env.backup
 .DS_Store
 
 # Sensitive one-off scripts

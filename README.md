@@ -32,6 +32,11 @@ cd frontend && npm run dev     # Runs on http://localhost:3000
 npm run seed
 ```
 
+### 4. Environment file backup
+The backend stores secrets in `backend/.env` and a backup copy is kept at `backend/.env.backup` for recovery.
+
+Keep both files private and do not commit them to a public repository. If you need to restore credentials, copy the backup back over the main env file.
+
 ---
 
 ## 🔑 Demo Credentials
