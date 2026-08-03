@@ -69,4 +69,69 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/auth/teacher-signup
+router.post('/teacher-signup', async (req, res) => {
+  try {
+    const { name, teacher_id, password, invite_code } = req.body;
+
+    // Validate invite code
+    const validCode = process.env.TEACHER_INVITE_CODE;
+    if (!invite_code || invite_code !== validCode) {
+      return res.status(403).json({ error: 'Invalid invite code. Please contact the administrator.' });
+    }
+
+    if (!name || !teacher_id || !password) {
+      return res.status(400).json({ error: 'Name, Teacher ID, and Password are all required.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    }
+
+    // Check if teacher_id already exists
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .ilike('student_id', teacher_id)
+      .single();
+
+    if (existing) {
+      return res.status(409).json({ error: `Teacher ID "${teacher_id.toUpperCase()}" is already taken.` });
+    }
+
+    const password_hash = await bcrypt.hash(password, 10);
+
+    const { data: newUser, error } = await supabase
+      .from('users')
+      .insert({
+        student_id: teacher_id.toUpperCase(),
+        name: name.trim(),
+        password_hash,
+        role: 'teacher'
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Auto-login: return a token
+    const payload = {
+      id: newUser.id,
+      student_id: newUser.student_id,
+      name: newUser.name,
+      role: newUser.role
+    };
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+
+    res.status(201).json({
+      message: 'Teacher account created successfully!',
+      token,
+      user: payload
+    });
+  } catch (err) {
+    console.error('Teacher signup error:', err);
+    res.status(500).json({ error: 'Server error during signup.' });
+  }
+});
+
 module.exports = router;
