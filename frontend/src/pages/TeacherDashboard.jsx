@@ -138,7 +138,7 @@ export const TeacherDashboard = () => {
 
           <button
             onClick={fetchDashboard}
-            className="p-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer"
+            className="p-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer"
           >
             <RefreshCw className="w-4 h-4" />
             <span className="hidden sm:inline">Refresh Data</span>
@@ -203,7 +203,7 @@ export const TeacherDashboard = () => {
 
       {/* SEARCH AND FILTERS */}
       <div className="clean-card p-4 flex flex-wrap items-center justify-between gap-4">
-        <div className="relative flex-1 min-w-[240px]">
+        <div className="relative flex-1 min-w-60">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
             <Search className="w-4 h-4 text-slate-400" />
           </div>
@@ -229,7 +229,7 @@ export const TeacherDashboard = () => {
               onClick={() => setStatusFilter(btn.id)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer ${
                 statusFilter === btn.id
-                  ? 'bg-blue-600 text-white shadow-xs'
+                  ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
               }`}
             >
@@ -240,7 +240,7 @@ export const TeacherDashboard = () => {
       </div>
 
       {/* STUDENT PROGRESS TABLE */}
-      <div className="clean-card overflow-hidden shadow-xs">
+      <div className="clean-card overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -307,7 +307,7 @@ export const TeacherDashboard = () => {
                               <span className="text-emerald-700 font-bold flex items-center gap-1 text-xs">
                                 <Camera className="w-3.5 h-3.5 text-emerald-600" /> {h.photo_count > 1 ? `${h.photo_count} Photos` : '1 Photo'}
                               </span>
-                              <span className="text-[10px] text-slate-500 font-mono truncate max-w-[80px]">
+                              <span className="text-[10px] text-slate-500 font-mono truncate max-w-20">
                                 {h.subject}
                               </span>
                             </button>

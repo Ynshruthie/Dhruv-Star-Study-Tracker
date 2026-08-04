@@ -6,7 +6,7 @@ export const TimeBanner = () => {
   const { simulatedTime, setSimulatedTime } = useContext(AuthContext);
 
   return (
-    <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 text-xs sm:text-sm text-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+    <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 text-xs sm:text-sm text-slate-200 flex flex-wrap items-center justify-between gap-3 shadow-sm">
       <div className="flex items-center gap-2">
         <span className="flex h-2.5 w-2.5 relative">
           <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${simulatedTime ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
@@ -30,7 +30,7 @@ export const TimeBanner = () => {
           onClick={() => setSimulatedTime('05:00')}
           className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
             simulatedTime === '05:00'
-              ? 'bg-emerald-600 text-white shadow-xs'
+              ? 'bg-emerald-600 text-white shadow-sm'
               : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
           }`}
         >
@@ -40,7 +40,7 @@ export const TimeBanner = () => {
           onClick={() => setSimulatedTime('06:00')}
           className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
             simulatedTime === '06:00'
-              ? 'bg-rose-600 text-white shadow-xs'
+              ? 'bg-rose-600 text-white shadow-sm'
               : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
           }`}
         >

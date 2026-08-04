@@ -498,7 +498,7 @@ export const StudentDashboard = () => {
                 <div 
                   key={h.id}
                   onClick={() => setSelectedImage(h)}
-                  className="bg-white border border-slate-200 hover:border-blue-400 rounded-xl p-4 space-y-3 cursor-pointer group transition shadow-xs hover:shadow-md"
+                  className="bg-white border border-slate-200 hover:border-blue-400 rounded-xl p-4 space-y-3 cursor-pointer group transition shadow-sm hover:shadow-md"
                 >
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
@@ -681,7 +681,7 @@ export const StudentDashboard = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-center">
-                <div className="text-xs text-emerald-700 font-semibold min-w-[120px] text-center sm:text-left">
+                <div className="text-xs text-emerald-700 font-semibold min-w-30 text-center sm:text-left">
                   {draftStatus || 'Draft not saved yet'}
                 </div>
 
