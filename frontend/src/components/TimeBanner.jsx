@@ -14,18 +14,18 @@ export const TimeBanner = () => {
         </span>
         <div className="flex items-center gap-1.5 font-medium text-slate-100">
           <Clock className="w-4 h-4 text-amber-400" />
-          <span>Attendance Rule: <strong className="text-amber-300 font-semibold">4:30 AM – 5:30 AM</strong></span>
+          <span>Slot Simulator: <strong className="text-amber-300 font-semibold">Test Present / Upload windows with custom time</strong></span>
         </div>
         {simulatedTime && (
           <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded text-xs font-mono font-bold flex items-center gap-1">
             <ShieldAlert className="w-3.5 h-3.5" />
-            SIMULATING: {simulatedTime} AM
+            SIMULATING: {simulatedTime}
           </span>
         )}
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-slate-400 text-xs hidden md:inline">Test Window:</span>
+        <span className="text-slate-400 text-xs hidden md:inline">Quick Test:</span>
         <button
           onClick={() => setSimulatedTime('05:00')}
           className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
@@ -34,7 +34,7 @@ export const TimeBanner = () => {
               : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
           }`}
         >
-          ⏰ Set 05:00 AM (Open)
+          Set 05:00
         </button>
         <button
           onClick={() => setSimulatedTime('06:00')}
@@ -44,7 +44,17 @@ export const TimeBanner = () => {
               : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
           }`}
         >
-          🚫 Set 06:00 AM (Closed)
+          Set 06:00
+        </button>
+        <button
+          onClick={() => setSimulatedTime('22:15')}
+          className={`px-2.5 py-1 rounded text-xs font-medium transition cursor-pointer ${
+            simulatedTime === '22:15'
+              ? 'bg-blue-600 text-white shadow-sm'
+              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+          }`}
+        >
+          Set 22:15
         </button>
         {simulatedTime && (
           <button

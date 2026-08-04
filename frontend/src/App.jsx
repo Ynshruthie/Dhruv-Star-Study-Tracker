@@ -3,7 +3,7 @@ import { AuthProvider, AuthContext } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import TimeBanner from './components/TimeBanner';
 import LoginPage from './pages/LoginPage';
-import StudentDashboard from './pages/StudentDashboard';
+import FamilyDashboard from './pages/FamilyDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
 
 const AppContent = () => {
@@ -33,7 +33,7 @@ const AppContent = () => {
         ) : user.role === 'teacher' ? (
           <TeacherDashboard />
         ) : (
-          <StudentDashboard />
+          <FamilyDashboard />
         )}
       </main>
 

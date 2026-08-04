@@ -7,6 +7,12 @@ const parseImageUrls = (raw) => {
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
     if (!trimmed || trimmed === 'null' || trimmed === '[]') return [];
+    if (trimmed.startsWith('{')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed.images) ? parsed.images : [];
+      } catch (e) {}
+    }
     if (trimmed.startsWith('[')) {
       try { return JSON.parse(trimmed); } catch (e) {}
     }
@@ -86,10 +92,35 @@ const cleanupExpiredStudyImages = async () => {
     }
 
     if (recordIdsToClear.length > 0) {
+      const { data: staleRows } = await supabase
+        .from('study_hours')
+        .select('id, image_url')
+        .in('id', recordIdsToClear);
+
+      const updates = (staleRows || []).map((row) => {
+        const trimmed = typeof row.image_url === 'string' ? row.image_url.trim() : '';
+        if (trimmed.startsWith('{')) {
+          try {
+            const parsed = JSON.parse(trimmed);
+            return {
+              id: row.id,
+              image_url: JSON.stringify({
+                ...parsed,
+                images: []
+              })
+            };
+          } catch (e) {}
+        }
+
+        return {
+          id: row.id,
+          image_url: '[]'
+        };
+      });
+
       const { error: updateError } = await supabase
         .from('study_hours')
-        .update({ image_url: '[]' })
-        .in('id', recordIdsToClear);
+        .upsert(updates, { onConflict: 'id' });
 
       if (updateError) {
         console.error('Error clearing image URLs in DB:', updateError);

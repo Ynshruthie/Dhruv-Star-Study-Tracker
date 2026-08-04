@@ -118,10 +118,10 @@ export const TeacherDashboard = () => {
             <span>Dhruv Star Academy • Teacher Monitoring Command</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Daily Attendance &amp; 4-Hour Study Dashboard
+            Daily Slot Attendance &amp; Study Dashboard
           </h1>
           <p className="text-sm text-slate-500">
-            Real-time tracking of student morning attendance (4:30–5:30 AM) and self-study work submissions.
+            Real-time tracking of scheduled slot attendance and uploaded study proof across all 4 slots.
           </p>
         </div>
 
@@ -162,11 +162,11 @@ export const TeacherDashboard = () => {
         {/* Card 2: Attendance Present */}
         <div className="clean-card p-5 border-emerald-200 bg-emerald-50/30 space-y-1">
           <div className="flex items-center justify-between text-emerald-800 text-xs font-bold uppercase tracking-wider">
-            <span>Attendance Marked</span>
+            <span>Slot Attendance</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-emerald-900">{metrics.presentCount}</div>
-          <div className="text-[11px] text-emerald-700">4:30–5:30 AM Window</div>
+          <div className="text-[11px] text-emerald-700">At least one slot started</div>
         </div>
 
         {/* Card 3: 4/4 Hours Completed */}
@@ -192,7 +192,7 @@ export const TeacherDashboard = () => {
         {/* Card 5: Missed Attendance / Absent */}
         <div className="clean-card p-5 border-rose-200 bg-rose-50/30 space-y-1 col-span-2 lg:col-span-1">
           <div className="flex items-center justify-between text-rose-800 text-xs font-bold uppercase tracking-wider">
-            <span>Missed Attendance</span>
+            <span>Missed Slots</span>
             <XCircle className="w-4 h-4 text-rose-600" />
           </div>
           <div className="text-2xl sm:text-3xl font-extrabold text-rose-900">{metrics.absentCount}</div>
@@ -246,7 +246,7 @@ export const TeacherDashboard = () => {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
                 <th className="py-4 px-6">Student Name &amp; ID</th>
-                <th className="py-4 px-6">Attendance (4:30-5:30 AM)</th>
+                <th className="py-4 px-6">Daily Slot Attendance</th>
                 <th className="py-4 px-6 text-center">Hour 1</th>
                 <th className="py-4 px-6 text-center">Hour 2</th>
                 <th className="py-4 px-6 text-center">Hour 3</th>

@@ -14,6 +14,61 @@ const getTodayDateString = (customDate) => {
   return `${year}-${month}-${day}`;
 };
 
+const hhmmToMinutes = (value) => {
+  if (!value || typeof value !== 'string' || !value.includes(':')) return null;
+  const [hourStr, minuteStr] = value.split(':');
+  const hour = parseInt(hourStr, 10);
+  const minute = parseInt(minuteStr, 10);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+  return (hour * 60) + minute;
+};
+
+const parseStoredHourPayload = (raw) => {
+  const basePayload = {
+    images: [],
+    managerType: 'SELF',
+    attendanceStatus: 'PENDING',
+    attendanceMarkedAt: null,
+    plannedStart: null,
+    plannedEnd: null,
+    actualStart: null,
+    actualEnd: null
+  };
+
+  if (!raw) return { ...basePayload };
+
+  if (typeof raw === 'string' && raw.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        ...basePayload,
+        ...parsed,
+        images: Array.isArray(parsed.images) ? parsed.images : []
+      };
+    } catch (error) {
+      return { ...basePayload };
+    }
+  }
+
+  if (typeof raw === 'string' && raw.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        ...basePayload,
+        images: Array.isArray(parsed) ? parsed : []
+      };
+    } catch (error) {
+      return { ...basePayload };
+    }
+  }
+
+  if (typeof raw === 'string') {
+    return { ...basePayload, images: [raw] };
+  }
+
+  return { ...basePayload };
+};
+
 // GET /api/teacher/dashboard
 router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, res) => {
   try {
@@ -25,20 +80,6 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
       .select('id, student_id, name')
       .eq('role', 'student')
       .order('name', { ascending: true });
-
-    // Get all attendance records for date
-    const { data: attendanceRecords } = await supabase
-      .from('attendance')
-      .select('*')
-      .eq('date', date);
-    const attendanceMap = new Map((attendanceRecords || []).map(a => [a.student_id, a]));
-
-    // Get all study submissions for date
-    const { data: submissions } = await supabase
-      .from('study_submissions')
-      .select('*')
-      .eq('date', date);
-    const submissionMap = new Map((submissions || []).map(s => [s.student_id, s]));
 
     // Get all study hours for date
     const { data: studyHours } = await supabase
@@ -57,25 +98,26 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
     let absentCount = 0;
     let submittedCount = 0;
     let pendingCount = 0;
+    const today = getTodayDateString();
+    const currentMinutes = date < today ? 1440 : ((new Date().getHours() * 60) + new Date().getMinutes());
 
     const studentReport = (students || []).map(st => {
-      const att = attendanceMap.get(st.student_id);
-      const sub = submissionMap.get(st.student_id);
       const studentHoursObj = hoursMap.get(st.student_id) || {};
-
-      // Build 4 hours array
-      const parseImageUrls = (raw) => {
-        if (!raw) return [];
-        if (Array.isArray(raw)) return raw;
-        if (typeof raw === 'string' && raw.trim().startsWith('[')) {
-          try { return JSON.parse(raw); } catch (e) {}
-        }
-        return [raw];
-      };
 
       const hours = [1, 2, 3, 4].map(hNum => {
         const hourData = studentHoursObj[hNum];
-        const urls = hourData ? parseImageUrls(hourData.image_url) : [];
+        const payload = hourData ? parseStoredHourPayload(hourData.image_url) : null;
+        const urls = payload?.images || [];
+        const plannedEndMinutes = hhmmToMinutes(payload?.plannedEnd);
+        const managerType = payload?.managerType || 'SELF';
+        let attendanceStatus = payload?.attendanceStatus || 'PENDING';
+
+        if (managerType === 'PARENT') {
+          attendanceStatus = 'PARENT';
+        } else if (attendanceStatus === 'PENDING' && plannedEndMinutes != null && currentMinutes >= plannedEndMinutes) {
+          attendanceStatus = 'ABSENT';
+        }
+
         return {
           hour_number: hNum,
           completed: !!hourData,
@@ -84,32 +126,41 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
           image_url: urls[0] || null,
           image_urls: urls,
           photo_count: urls.length,
-          created_at: hourData ? hourData.created_at : null
+          created_at: hourData ? hourData.created_at : null,
+          manager_type: managerType,
+          attendance_status: attendanceStatus,
+          attendance_marked_at: payload?.attendanceMarkedAt || null
         };
       });
 
       const completedHoursCount = hours.filter(h => h.completed).length;
+      const uploadedHoursCount = hours.filter(h => h.photo_count > 0).length;
+      const presentSlots = hours.filter(h => h.attendance_status === 'PRESENT');
+      const pendingSlots = hours.filter(h => h.completed && h.attendance_status === 'PENDING');
+      const absentSlots = hours.filter(h => h.completed && h.attendance_status === 'ABSENT');
+      const parentSlots = hours.filter(h => h.completed && h.manager_type === 'PARENT');
+      const hasSchedule = completedHoursCount > 0;
 
-      // Status determination logic
-      let attendanceStatus = 'ABSENT';
-      if (att) {
-        attendanceStatus = att.status; // PRESENT or ABSENT
+      let attendanceStatus = 'PENDING';
+      if (presentSlots.length > 0) {
+        attendanceStatus = 'PRESENT';
+      } else if (parentSlots.length === completedHoursCount && completedHoursCount > 0) {
+        attendanceStatus = 'PARENT';
+      } else if (hasSchedule && pendingSlots.length === 0 && absentSlots.length > 0) {
+        attendanceStatus = 'ABSENT';
       }
 
       let overallStatus = 'Pending';
-      if (attendanceStatus === 'ABSENT' || (!att && new Date().getHours() >= 6)) {
+      if (uploadedHoursCount === 4) {
+        overallStatus = 'Submitted';
+        submittedCount++;
+      } else if (attendanceStatus === 'ABSENT') {
         overallStatus = 'Absent';
         absentCount++;
       } else if (attendanceStatus === 'PRESENT') {
         presentCount++;
-        if (completedHoursCount === 4) {
-          overallStatus = 'Submitted';
-          submittedCount++;
-        } else {
-          overallStatus = 'Pending';
-          pendingCount++;
-        }
-      } else {
+        pendingCount++;
+      } else if (hasSchedule) {
         pendingCount++;
       }
 
@@ -117,7 +168,11 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
         id: st.id,
         student_id: st.student_id,
         name: st.name,
-        attendance: att ? { marked: true, time: att.time, status: att.status } : { marked: false, status: attendanceStatus },
+        attendance: {
+          marked: presentSlots.length > 0,
+          time: presentSlots[0]?.attendance_marked_at || null,
+          status: attendanceStatus
+        },
         hours,
         completedHoursCount,
         overallStatus

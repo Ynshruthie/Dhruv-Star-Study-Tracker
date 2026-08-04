@@ -49,13 +49,14 @@ initDb().then(async () => {
       .from('users')
       .select('id')
       .limit(1);
-      
+
     if (!error && (!users || users.length === 0)) {
-      console.log('No users found in Supabase. You may need to run the seed script after creating tables.');
-      // Optionally await seed(); but we'll wait for the user to create tables first via SQL editor
+      console.log('No users found in Supabase. Seeding demo accounts automatically...');
+      await seed();
     }
   } catch (err) {
     console.error('Could not check users table. Did you run schema.sql in Supabase SQL editor?');
+    console.error(err.message || err);
   }
 
   app.listen(PORT, () => {

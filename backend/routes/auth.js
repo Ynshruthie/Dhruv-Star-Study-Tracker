@@ -9,13 +9,14 @@ const router = express.Router();
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { student_id, password } = req.body;
+    const loginId = (req.body.student_id || req.body.teacher_id || req.body.login_id || '').trim();
+    const { password } = req.body;
 
-    if (!student_id || !password) {
-      return res.status(400).json({ error: 'Student ID / Username and Password are required' });
+    if (!loginId || !password) {
+      return res.status(400).json({ error: 'Student ID / Teacher ID and Password are required' });
     }
 
-    const cleanId = student_id.trim().toUpperCase();
+    const cleanId = loginId.toUpperCase();
     const { data: user, error } = await supabase
       .from('users')
       .select('*')
