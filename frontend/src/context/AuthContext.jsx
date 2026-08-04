@@ -30,6 +30,7 @@ export const AuthProvider = ({ children }) => {
 
     if (!token) {
       setUser(null);
+      setSimulatedTime(null);
       setLoading(false);
       return;
     }
@@ -54,12 +55,14 @@ export const AuthProvider = ({ children }) => {
     const res = await api.post('/auth/login', { student_id, password });
     const { token, user: userData } = res.data;
     localStorage.setItem('dhruv_token', token);
+    setSimulatedTime(null);
     setUser(userData);
     return userData;
   };
 
   const logout = () => {
     localStorage.removeItem('dhruv_token');
+    setSimulatedTime(null);
     setUser(null);
   };
 

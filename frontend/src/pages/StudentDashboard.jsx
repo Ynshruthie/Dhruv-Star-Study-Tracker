@@ -25,6 +25,38 @@ const SUBJECT_OPTIONS = [
   'Exam Preparation'
 ];
 
+const buildDefaultFormHours = () => ({
+  1: { subject: 'Mathematics', time_slot: '05:30 AM - 06:30 AM', files: [], previews: [] },
+  2: { subject: 'Physics (Mechanics & Optics)', time_slot: '06:30 AM - 07:30 AM', files: [], previews: [] },
+  3: { subject: 'Chemistry (Organic & Physical)', time_slot: '09:00 PM - 10:00 PM', files: [], previews: [] },
+  4: { subject: 'English Literature', time_slot: '10:00 PM - 11:00 PM', files: [], previews: [] }
+});
+
+const getStudyDraftKey = (studentId, date) => {
+  if (!studentId || !date) return null;
+  return `dhruv_study_draft_${studentId}_${date}`;
+};
+
+const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(reader.result);
+  reader.onerror = () => reject(new Error('Failed to read file'));
+  reader.readAsDataURL(file);
+});
+
+const dataUrlToFile = (dataUrl, fileName, mimeType) => {
+  const cleanDataUrl = dataUrl.split(',')[1];
+  if (!cleanDataUrl) return null;
+
+  const binary = atob(cleanDataUrl);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  return new File([bytes], fileName || 'photo', { type: mimeType || 'image/png' });
+};
+
 export const StudentDashboard = () => {
   const { user, simulatedTime } = useContext(AuthContext);
   const [attendance, setAttendance] = useState(null);
@@ -36,14 +68,81 @@ export const StudentDashboard = () => {
   const [attError, setAttError] = useState('');
   const [studyError, setStudyError] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
+  const [draftStatus, setDraftStatus] = useState('');
 
   // Form state for 4 hours (now supporting multiple files)
-  const [formHours, setFormHours] = useState({
-    1: { subject: 'Mathematics (Calculus)', time_slot: '05:30 AM - 06:30 AM', files: [], previews: [] },
-    2: { subject: 'Physics (Mechanics & Optics)', time_slot: '06:30 AM - 07:30 AM', files: [], previews: [] },
-    3: { subject: 'Chemistry (Organic & Physical)', time_slot: '09:00 PM - 10:00 PM', files: [], previews: [] },
-    4: { subject: 'English Literature', time_slot: '10:00 PM - 11:00 PM', files: [], previews: [] }
-  });
+  const [formHours, setFormHours] = useState(buildDefaultFormHours);
+
+  const saveStudyDraft = async (draftHours = formHours, mode = 'auto') => {
+    if (!user?.student_id || !attendance?.date) return;
+
+    const draftKey = getStudyDraftKey(user.student_id, attendance.date);
+    if (!draftKey) return;
+
+    const draftPayload = {};
+    for (let h = 1; h <= 4; h++) {
+      const hourState = draftHours[h] || buildDefaultFormHours()[h];
+      const fileData = await Promise.all((hourState.files || []).map(async (file) => {
+        if (!file || typeof file === 'string') return null;
+        const dataUrl = await readFileAsDataUrl(file);
+        return {
+          name: file.name || `hour-${h}-photo-${Date.now()}`,
+          type: file.type || 'image/png',
+          dataUrl
+        };
+      }));
+
+      draftPayload[h] = {
+        subject: hourState.subject || '',
+        time_slot: hourState.time_slot || '',
+        fileData: fileData.filter(Boolean)
+      };
+    }
+
+    localStorage.setItem(draftKey, JSON.stringify(draftPayload));
+    setDraftStatus(mode === 'manual' ? 'Draft saved.' : 'Auto-saved.');
+  };
+
+  const restoreStudyDraft = () => {
+    if (!user?.student_id || !attendance?.date) return null;
+
+    const draftKey = getStudyDraftKey(user.student_id, attendance.date);
+    if (!draftKey) return null;
+
+    try {
+      const rawDraft = localStorage.getItem(draftKey);
+      if (!rawDraft) return null;
+
+      const parsedDraft = JSON.parse(rawDraft);
+      const restored = buildDefaultFormHours();
+
+      for (let h = 1; h <= 4; h++) {
+        const savedHour = parsedDraft[h] || {};
+        const savedFiles = Array.isArray(savedHour.fileData) ? savedHour.fileData : [];
+
+        restored[h] = {
+          subject: savedHour.subject || restored[h].subject,
+          time_slot: savedHour.time_slot || restored[h].time_slot,
+          files: savedFiles
+            .map(fileData => dataUrlToFile(fileData.dataUrl, fileData.name, fileData.type))
+            .filter(Boolean),
+          previews: savedFiles.map(fileData => fileData.dataUrl).filter(Boolean)
+        };
+      }
+
+      setDraftStatus('Draft restored.');
+      return restored;
+    } catch (error) {
+      console.error('Failed to restore study draft:', error);
+      return null;
+    }
+  };
+
+  const clearStudyDraft = () => {
+    if (!user?.student_id || !attendance?.date) return;
+    const draftKey = getStudyDraftKey(user.student_id, attendance.date);
+    if (draftKey) localStorage.removeItem(draftKey);
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -67,6 +166,15 @@ export const StudentDashboard = () => {
     fetchData();
   }, [simulatedTime]);
 
+  useEffect(() => {
+    if (!user || !attendance?.date || studyData.isSubmitted) return;
+
+    const restoredDraft = restoreStudyDraft();
+    if (restoredDraft) {
+      setFormHours(restoredDraft);
+    }
+  }, [user, attendance?.date, studyData.isSubmitted]);
+
   const handleMarkAttendance = async () => {
     setAttError('');
     setMarkingAtt(true);
@@ -81,31 +189,38 @@ export const StudentDashboard = () => {
   };
 
   const handleInputChange = (hNum, field, val) => {
-    setFormHours(prev => ({
-      ...prev,
-      [hNum]: {
-        ...prev[hNum],
-        [field]: val
-      }
-    }));
+    setFormHours(prev => {
+      const nextState = {
+        ...prev,
+        [hNum]: {
+          ...prev[hNum],
+          [field]: val
+        }
+      };
+      saveStudyDraft(nextState, 'auto');
+      return nextState;
+    });
   };
 
-  const handleFileChange = (hNum, selectedFileList) => {
+  const handleFileChange = async (hNum, selectedFileList) => {
     if (!selectedFileList || selectedFileList.length === 0) return;
     const selectedFiles = Array.from(selectedFileList);
 
     const currentFiles = formHours[hNum].files || [];
     const newFiles = [...currentFiles, ...selectedFiles].slice(0, 25);
-    const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+    const newPreviews = await Promise.all(newFiles.map(file => readFileAsDataUrl(file)));
 
-    setFormHours(prev => ({
-      ...prev,
+    const nextState = {
+      ...formHours,
       [hNum]: {
-        ...prev[hNum],
+        ...formHours[hNum],
         files: newFiles,
         previews: newPreviews
       }
-    }));
+    };
+
+    setFormHours(nextState);
+    await saveStudyDraft(nextState, 'auto');
   };
 
   const removeFile = (hNum, indexToRemove) => {
@@ -153,6 +268,10 @@ export const StudentDashboard = () => {
       await api.post('/study/submit', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+
+      clearStudyDraft();
+      setDraftStatus('Submitted successfully.');
+      setFormHours(buildDefaultFormHours());
 
       confetti({
         particleCount: 100,
@@ -561,20 +680,35 @@ export const StudentDashboard = () => {
                 <span className="text-amber-800 font-bold">Rule:</span> All 4 study hours must be completed with uploaded images before final submission.
               </div>
 
-              <button
-                type="submit"
-                disabled={submittingStudy || !isAttPresent}
-                className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-              >
-                {submittingStudy ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <>
-                    <FileCheck className="w-5 h-5" />
-                    <span>Submit All 4 Study Hours</span>
-                  </>
-                )}
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto items-center">
+                <div className="text-xs text-emerald-700 font-semibold min-w-[120px] text-center sm:text-left">
+                  {draftStatus || 'Draft not saved yet'}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => saveStudyDraft(formHours, 'manual')}
+                  disabled={submittingStudy || !user?.student_id || !attendance?.date}
+                  className="w-full sm:w-auto px-5 py-3 rounded-xl font-bold text-sm text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Save Draft
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={submittingStudy || !isAttPresent}
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  {submittingStudy ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <FileCheck className="w-5 h-5" />
+                      <span>Submit All 4 Study Hours</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
           </form>
