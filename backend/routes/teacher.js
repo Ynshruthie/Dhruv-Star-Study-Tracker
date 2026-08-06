@@ -151,13 +151,18 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
     });
     const nextBookingMap = new Map();
     (futureStudyHours || []).forEach(h => {
+      const payload = parseStoredHourPayload(h.image_url);
+      // A future row is a booking only after the student has confirmed it
+      // through the Sunday weekly-plan action. This prevents old/imported
+      // rows from being presented as a student booking.
+      if (!payload.bookingConfirmedAt) return;
+
       const nextBooking = nextBookingMap.get(h.student_id);
       if (!nextBooking || h.date < nextBooking.date) {
         nextBookingMap.set(h.student_id, { date: h.date, hours: {} });
       }
       const booking = nextBookingMap.get(h.student_id);
       if (booking.date === h.date) {
-        const payload = parseStoredHourPayload(h.image_url);
         booking.hours[h.hour_number] = {
           subject: h.subject,
           planned_start: payload.plannedStart,

@@ -150,6 +150,7 @@ const serializeHourPayload = (payload) => JSON.stringify({
   managerType: payload.managerType || 'SELF',
   attendanceStatus: payload.attendanceStatus || 'PENDING',
   attendanceMarkedAt: payload.attendanceMarkedAt || null,
+  bookingConfirmedAt: payload.bookingConfirmedAt || null,
   plannedStart: payload.plannedStart || null,
   plannedEnd: payload.plannedEnd || null,
   actualStart: payload.actualStart || null,
@@ -265,6 +266,7 @@ const formatHourResponse = (hourRow, currentMinutes) => {
     active_time_slot: derived.activeLabel,
     attendance_status: derived.attendanceStatus,
     attendance_marked_at: derived.payload.attendanceMarkedAt,
+    booking_confirmed_at: derived.payload.bookingConfirmedAt || null,
     planned_start: derived.payload.plannedStart,
     planned_end: derived.payload.plannedEnd,
     actual_start: derived.payload.actualStart,
@@ -426,6 +428,7 @@ router.post('/schedule', authenticateToken, async (req, res) => {
       };
     });
 
+    const bookingConfirmedAt = new Date().toISOString();
     const rowsToUpsert = weekDates.flatMap((date) => normalizedSlots.map((slot) => {
       const existingRow = existingMap.get(`${date}-${slot.hour_number}`);
       const existingPayload = existingRow ? parseStoredHourPayload(existingRow.image_url) : null;
@@ -440,7 +443,12 @@ router.post('/schedule', authenticateToken, async (req, res) => {
         throw new Error(`The ${date} Slot ${slot.hour_number} already has activity and cannot be changed.`);
       }
 
-      if (existingMatchesIncoming) return existingRow;
+      if (existingMatchesIncoming) {
+        return {
+          ...existingRow,
+          image_url: serializeHourPayload({ ...existingPayload, bookingConfirmedAt })
+        };
+      }
 
       return {
         student_id,
@@ -453,6 +461,7 @@ router.post('/schedule', authenticateToken, async (req, res) => {
           managerType: slot.managerType,
           attendanceStatus: slot.managerType === 'PARENT' ? 'PARENT' : 'PENDING',
           attendanceMarkedAt: null,
+          bookingConfirmedAt,
           plannedStart: slot.plannedStart,
           plannedEnd: slot.plannedEnd,
           actualStart: null,

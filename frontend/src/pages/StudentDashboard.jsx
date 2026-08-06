@@ -87,7 +87,10 @@ export const StudentDashboard = () => {
   const fetchWeeklyPlan = async () => {
     try {
       const { data } = await api.get(`/study/week?week_start=${weekStart}`);
-      const firstScheduledDay = data.dates.find((day) => (data.by_date[day] || []).length === 4);
+      const firstScheduledDay = data.dates.find((day) => {
+        const daySlots = data.by_date[day] || [];
+        return daySlots.length === 4 && daySlots.every((slot) => slot.booking_confirmed_at);
+      });
       if (!firstScheduledDay) {
         setWeeklyPlanSaved(false);
         return;
