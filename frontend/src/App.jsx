@@ -1,7 +1,6 @@
 import React, { useContext } from 'react';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 import Navbar from './components/Navbar';
-import TimeBanner from './components/TimeBanner';
 import LoginPage from './pages/LoginPage';
 import FamilyDashboard from './pages/FamilyDashboard';
 import TeacherDashboard from './pages/TeacherDashboard';
@@ -24,7 +23,6 @@ const AppContent = () => {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-slate-900 flex flex-col font-sans">
-      <TimeBanner />
       <Navbar />
 
       <main className="flex-1">

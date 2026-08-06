@@ -4,6 +4,8 @@ const { supabase } = require('../db');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
+const START_GRACE_MINUTES = 15;
+const UPLOAD_GRACE_MINUTES = 15;
 
 const getTodayDateString = (customDate) => {
   if (customDate) return customDate;
@@ -21,6 +23,48 @@ const hhmmToMinutes = (value) => {
   const minute = parseInt(minuteStr, 10);
   if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
   return (hour * 60) + minute;
+};
+
+const minutesToHHMM = (minutes) => {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  return `${String(Math.floor(normalized / 60)).padStart(2, '0')}:${String(normalized % 60).padStart(2, '0')}`;
+};
+
+const formatHHMM = (value) => {
+  const minutes = hhmmToMinutes(value);
+  if (minutes == null) return value || '--';
+  const hour24 = Math.floor(minutes / 60);
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minutes % 60).padStart(2, '0')} ${hour24 >= 12 ? 'PM' : 'AM'}`;
+};
+
+const formatTimeRange = (start, end) => `${formatHHMM(start)} – ${formatHHMM(end)}`;
+
+// A mentor is always another teacher account, stored by its login ID rather
+// than a free-form display name.
+const getMentorId = async (mentor) => {
+  const mentorId = mentor?.trim().toUpperCase();
+  if (!mentorId) {
+    const validationError = new Error('Mentor ID is required.');
+    validationError.status = 400;
+    throw validationError;
+  }
+
+  const { data: mentorUser, error } = await supabase
+    .from('users')
+    .select('student_id')
+    .ilike('student_id', mentorId)
+    .eq('role', 'teacher')
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!mentorUser) {
+    const validationError = new Error(`Mentor ID "${mentorId}" was not found.`);
+    validationError.status = 400;
+    throw validationError;
+  }
+
+  return mentorUser.student_id;
 };
 
 const parseStoredHourPayload = (raw) => {
@@ -77,7 +121,7 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
     // Get all students
     const { data: students } = await supabase
       .from('users')
-      .select('id, student_id, name')
+      .select('id, student_id, name, mentor')
       .eq('role', 'student')
       .order('name', { ascending: true });
 
@@ -99,7 +143,11 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
     let submittedCount = 0;
     let pendingCount = 0;
     const today = getTodayDateString();
-    const currentMinutes = date < today ? 1440 : ((new Date().getHours() * 60) + new Date().getMinutes());
+    const currentMinutes = date < today
+      ? 1440
+      : date > today
+        ? -1
+        : ((new Date().getHours() * 60) + new Date().getMinutes());
 
     const studentReport = (students || []).map(st => {
       const studentHoursObj = hoursMap.get(st.student_id) || {};
@@ -108,14 +156,35 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
         const hourData = studentHoursObj[hNum];
         const payload = hourData ? parseStoredHourPayload(hourData.image_url) : null;
         const urls = payload?.images || [];
+        const plannedStartMinutes = hhmmToMinutes(payload?.plannedStart);
         const plannedEndMinutes = hhmmToMinutes(payload?.plannedEnd);
+        const actualEndMinutes = hhmmToMinutes(payload?.actualEnd);
+        const startDeadlineMinutes = plannedStartMinutes == null ? null : plannedStartMinutes + START_GRACE_MINUTES;
+        const uploadDeadlineMinutes = actualEndMinutes == null ? null : actualEndMinutes + UPLOAD_GRACE_MINUTES;
         const managerType = payload?.managerType || 'SELF';
         let attendanceStatus = payload?.attendanceStatus || 'PENDING';
 
         if (managerType === 'PARENT') {
           attendanceStatus = 'PARENT';
-        } else if (attendanceStatus === 'PENDING' && plannedEndMinutes != null && currentMinutes >= plannedEndMinutes) {
+        } else if (attendanceStatus === 'PENDING' && startDeadlineMinutes != null && currentMinutes > startDeadlineMinutes) {
           attendanceStatus = 'ABSENT';
+        }
+
+        let timingLabel = 'Not scheduled';
+        if (hourData && managerType === 'PARENT') {
+          timingLabel = `Parent managed · ${formatTimeRange(payload?.plannedStart, payload?.plannedEnd)}`;
+        } else if (hourData && attendanceStatus === 'ABSENT') {
+          timingLabel = `Start missed · due by ${formatHHMM(minutesToHHMM(startDeadlineMinutes))}`;
+        } else if (hourData && attendanceStatus === 'PENDING' && currentMinutes < plannedStartMinutes) {
+          timingLabel = `Starts ${formatHHMM(payload?.plannedStart)} · 15 min grace`;
+        } else if (hourData && attendanceStatus === 'PENDING') {
+          timingLabel = `Start now · ${Math.max(0, startDeadlineMinutes - currentMinutes)} min grace left`;
+        } else if (hourData && attendanceStatus === 'PRESENT' && actualEndMinutes != null && currentMinutes < actualEndMinutes) {
+          timingLabel = `Studying · ${actualEndMinutes - currentMinutes} min left`;
+        } else if (hourData && attendanceStatus === 'PRESENT' && uploadDeadlineMinutes != null && currentMinutes <= uploadDeadlineMinutes) {
+          timingLabel = `Upload proof · ${uploadDeadlineMinutes - currentMinutes} min left`;
+        } else if (hourData && attendanceStatus === 'PRESENT') {
+          timingLabel = 'Proof upload window closed';
         }
 
         return {
@@ -129,7 +198,10 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
           created_at: hourData ? hourData.created_at : null,
           manager_type: managerType,
           attendance_status: attendanceStatus,
-          attendance_marked_at: payload?.attendanceMarkedAt || null
+          attendance_marked_at: payload?.attendanceMarkedAt || null,
+          planned_time_slot: hourData ? formatTimeRange(payload?.plannedStart, payload?.plannedEnd) : null,
+          active_time_slot: payload?.actualStart && payload?.actualEnd ? formatTimeRange(payload.actualStart, payload.actualEnd) : null,
+          timing_label: timingLabel
         };
       });
 
@@ -168,6 +240,7 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
         id: st.id,
         student_id: st.student_id,
         name: st.name,
+        mentor: st.mentor,
         attendance: {
           marked: presentSlots.length > 0,
           time: presentSlots[0]?.attendance_marked_at || null,
@@ -199,10 +272,10 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
 // POST /api/teacher/students — Create a new student
 router.post('/students', authenticateToken, requireRole('teacher'), async (req, res) => {
   try {
-    const { name, student_id, password } = req.body;
+    const { name, student_id, password, mentor } = req.body;
 
-    if (!name || !student_id || !password) {
-      return res.status(400).json({ error: 'Name, Student ID, and Password are all required.' });
+    if (!name || !student_id || !password || !mentor?.trim()) {
+      return res.status(400).json({ error: 'Name, Student ID, Mentor ID, and Password are all required.' });
     }
 
     if (student_id.length < 3) {
@@ -224,13 +297,21 @@ router.post('/students', authenticateToken, requireRole('teacher'), async (req, 
       return res.status(409).json({ error: `Student ID "${student_id.toUpperCase()}" already exists. Please use a different ID.` });
     }
 
+    const mentorId = await getMentorId(mentor);
+
     // Hash the password
     const password_hash = await bcrypt.hash(password, 10);
 
     // Insert new student into database
     const { data: result, error } = await supabase
       .from('users')
-      .insert({ student_id: student_id.toUpperCase(), name: name.trim(), password_hash, role: 'student' })
+      .insert({
+        student_id: student_id.toUpperCase(),
+        name: name.trim(),
+        mentor: mentorId,
+        password_hash,
+        role: 'student'
+      })
       .select()
       .single();
 
@@ -242,12 +323,95 @@ router.post('/students', authenticateToken, requireRole('teacher'), async (req, 
         id: result.id,
         student_id: student_id.toUpperCase(),
         name: name.trim(),
+        mentor: result.mentor,
         role: 'student'
       }
     });
   } catch (err) {
     console.error('Create student error:', err);
-    res.status(500).json({ error: 'Failed to create student. Please try again.' });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to create student. Please try again.' });
+  }
+});
+
+// PUT /api/teacher/students/:studentId — Update a student's profile and mentor
+router.put('/students/:studentId', authenticateToken, requireRole('teacher'), async (req, res) => {
+  try {
+    const studentId = decodeURIComponent(req.params.studentId || '').trim();
+    const { name, mentor, password } = req.body;
+
+    if (!name?.trim()) {
+      return res.status(400).json({ error: 'Student name is required.' });
+    }
+
+    if (!mentor?.trim()) {
+      return res.status(400).json({ error: 'Mentor ID is required.' });
+    }
+
+    if (password && password.length < 6) {
+      return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+    }
+
+    const { data: existing, error: existingError } = await supabase
+      .from('users')
+      .select('id, student_id')
+      .ilike('student_id', studentId)
+      .eq('role', 'student')
+      .maybeSingle();
+
+    if (existingError) {
+      console.error('Find student for update error:', existingError);
+      return res.status(500).json({ error: 'Could not find the student to update.' });
+    }
+
+    if (!existing) {
+      return res.status(404).json({ error: `Student "${studentId}" not found.` });
+    }
+
+    const mentorId = await getMentorId(mentor);
+    const updates = {
+      name: name.trim(),
+      mentor: mentorId
+    };
+
+    if (password) {
+      updates.password_hash = await bcrypt.hash(password, 10);
+    }
+
+    // Keep the mutation separate from the response read. This works with
+    // Supabase projects whose UPDATE policies allow writes but do not allow
+    // returning rows from UPDATE ... RETURNING.
+    const { error: updateError } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', existing.id)
+      .eq('role', 'student');
+
+    if (updateError) throw updateError;
+
+    const { data: updatedStudent, error: updatedStudentError } = await supabase
+      .from('users')
+      .select('id, student_id, name, mentor, role')
+      .eq('id', existing.id)
+      .eq('role', 'student')
+      .maybeSingle();
+
+    if (updatedStudentError) throw updatedStudentError;
+    if (!updatedStudent) {
+      return res.status(404).json({ error: `Student "${studentId}" could not be updated.` });
+    }
+
+    res.json({
+      message: `Student "${updatedStudent.name}" updated successfully.`,
+      student: updatedStudent
+    });
+  } catch (err) {
+    console.error('Update student error:', {
+      message: err.message,
+      code: err.code,
+      details: err.details,
+      hint: err.hint
+    });
+    res.status(err.status || 500).json({ error: err.status ? err.message : 'Failed to update student. Please try again.' });
   }
 });
 

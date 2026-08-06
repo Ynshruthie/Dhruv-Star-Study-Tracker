@@ -4,6 +4,15 @@ import api from '../utils/api';
 import ImageModal from '../components/ImageModal';
 import { AlertCircle, CalendarClock, CheckCircle2, Clock3, ImagePlus, Upload, Users } from 'lucide-react';
 
+const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const getReviewWeekStart = () => {
+  const today = new Date();
+  const monday = new Date(today);
+  const offset = today.getDay() === 0 ? 6 : today.getDay() - 1;
+  monday.setDate(today.getDate() - offset);
+  return formatDate(monday);
+};
+
 export const ParentDashboard = () => {
   const { user, simulatedTime } = useContext(AuthContext);
   const [date, setDate] = useState('');
@@ -14,6 +23,8 @@ export const ParentDashboard = () => {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
+  const [week, setWeek] = useState({ dates: [], by_date: {} });
+  const [weekStart] = useState(getReviewWeekStart);
 
   const fetchSlots = async () => {
     setLoading(true);
@@ -32,8 +43,19 @@ export const ParentDashboard = () => {
     }
   };
 
+  const fetchWeeklyStudy = async () => {
+    try {
+      const { data } = await api.get(`/study/week?week_start=${weekStart}`);
+      setWeek({ dates: data.dates || [], by_date: data.by_date || {} });
+    } catch (err) {
+      console.error('Failed to load weekly study summary:', err);
+      setError('Failed to load the weekly study summary.');
+    }
+  };
+
   useEffect(() => {
     fetchSlots();
+    fetchWeeklyStudy();
   }, [simulatedTime]);
 
   const totalPhotos = useMemo(
@@ -108,6 +130,38 @@ export const ParentDashboard = () => {
           <span>{error || message}</span>
         </div>
       )}
+
+      <section className="clean-card overflow-hidden">
+        <div className="p-6 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">This Week&apos;s Study Plan &amp; Progress</h2>
+            <p className="text-sm text-slate-500">What your child studied from Monday through Saturday, including uploaded proof.</p>
+          </div>
+          <span className="text-xs font-mono font-semibold text-slate-600">Week of {weekStart}</span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[680px] text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wider text-slate-500">
+              <tr><th className="px-6 py-3">Day</th><th className="px-6 py-3">Subjects &amp; Slots</th><th className="px-6 py-3">Proof</th></tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {week.dates.map((day) => {
+                const daySlots = week.by_date[day] || [];
+                const photoCount = daySlots.reduce((count, slot) => count + (slot.photo_count || 0), 0);
+                return (
+                  <tr key={day}>
+                    <td className="px-6 py-4 align-top font-medium text-slate-900">{new Date(`${day}T00:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                    <td className="px-6 py-4">
+                      {daySlots.length ? <div className="flex flex-wrap gap-2">{daySlots.map((slot) => <span key={slot.hour_number} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"><strong>#{slot.hour_number}</strong> {slot.subject} <span className="text-slate-400">{slot.manager_type === 'PARENT' ? 'Parent' : 'Self'}</span></span>)}</div> : <span className="text-slate-400">No slots booked</span>}
+                    </td>
+                    <td className="px-6 py-4 align-top text-slate-700">{daySlots.length ? `${photoCount} photo${photoCount === 1 ? '' : 's'} uploaded` : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       {hours.length === 0 ? (
         <div className="clean-card p-6 text-sm text-slate-600 flex items-center gap-3">

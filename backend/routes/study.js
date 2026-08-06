@@ -6,6 +6,9 @@ const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
 const MAX_IMAGES_PER_SLOT = 25;
+const START_GRACE_MINUTES = 15;
+const STUDY_DURATION_MINUTES = 60;
+const UPLOAD_GRACE_MINUTES = 15;
 
 const getTodayDateString = (customDate) => {
   if (customDate) return customDate;
@@ -16,17 +19,28 @@ const getTodayDateString = (customDate) => {
   return `${year}-${month}-${day}`;
 };
 
-const isAllowedScheduleDate = (dateString) => {
-  if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    return false;
-  }
+const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
+const parseDate = (dateString) => {
+  if (!dateString || !/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return null;
 
   const [year, month, day] = dateString.split('-').map(Number);
-  const parsedDate = new Date(year, month - 1, day);
-  const weekday = parsedDate.getDay();
-
-  return weekday >= 1 && weekday <= 6;
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
 };
+
+const getMondayForDate = (date) => {
+  const monday = new Date(date);
+  const offset = (monday.getDay() + 6) % 7;
+  monday.setDate(monday.getDate() - offset);
+  return monday;
+};
+
+const getWeekDates = (weekStart) => Array.from({ length: 6 }, (_, index) => {
+  const date = new Date(weekStart);
+  date.setDate(date.getDate() + index);
+  return formatDate(date);
+});
 
 const getClockContext = (simulatedTime) => {
   if (simulatedTime && typeof simulatedTime === 'string' && simulatedTime.includes(':')) {
@@ -149,14 +163,16 @@ const deriveSlotState = (hourRow, currentMinutes) => {
   const plannedEndMinutes = hhmmToMinutes(payload.plannedEnd);
   const actualStartMinutes = hhmmToMinutes(payload.actualStart);
   const actualEndMinutes = hhmmToMinutes(payload.actualEnd);
+  const startDeadlineMinutes = plannedStartMinutes == null ? null : plannedStartMinutes + START_GRACE_MINUTES;
+  const uploadDeadlineMinutes = actualEndMinutes == null ? null : actualEndMinutes + UPLOAD_GRACE_MINUTES;
 
   let attendanceStatus = payload.attendanceStatus || 'PENDING';
 
   if (
     managerType === 'SELF' &&
     attendanceStatus === 'PENDING' &&
-    plannedEndMinutes != null &&
-    currentMinutes >= plannedEndMinutes
+    startDeadlineMinutes != null &&
+    currentMinutes > startDeadlineMinutes
   ) {
     attendanceStatus = 'ABSENT';
   }
@@ -165,20 +181,26 @@ const deriveSlotState = (hourRow, currentMinutes) => {
     managerType === 'SELF' &&
     attendanceStatus === 'PENDING' &&
     plannedStartMinutes != null &&
-    plannedEndMinutes != null &&
+    startDeadlineMinutes != null &&
     currentMinutes >= plannedStartMinutes &&
-    currentMinutes < plannedEndMinutes
+    currentMinutes <= startDeadlineMinutes
   );
 
   const uploadWindowOpen = managerType === 'PARENT'
     ? true
     : (
       attendanceStatus === 'PRESENT' &&
-      actualStartMinutes != null &&
       actualEndMinutes != null &&
-      currentMinutes >= actualStartMinutes &&
-      currentMinutes < actualEndMinutes
+      currentMinutes >= actualEndMinutes &&
+      currentMinutes <= uploadDeadlineMinutes
     );
+
+  const studyRemainingMinutes = (
+    managerType === 'SELF' &&
+    attendanceStatus === 'PRESENT' &&
+    actualEndMinutes != null &&
+    currentMinutes < actualEndMinutes
+  ) ? actualEndMinutes - currentMinutes : null;
 
   return {
     payload: {
@@ -197,6 +219,9 @@ const deriveSlotState = (hourRow, currentMinutes) => {
     attendanceStatus,
     markButtonEnabled,
     uploadWindowOpen,
+    startDeadlineMinutes,
+    uploadDeadlineMinutes,
+    studyRemainingMinutes,
     plannedStartMinutes,
     plannedEndMinutes,
     actualStartMinutes,
@@ -245,7 +270,11 @@ const formatHourResponse = (hourRow, currentMinutes) => {
     actual_start: derived.payload.actualStart,
     actual_end: derived.payload.actualEnd,
     mark_button_enabled: derived.markButtonEnabled,
+    start_window_label: derived.plannedStartMinutes == null ? null : buildTimeRangeLabel(derived.payload.plannedStart, minutesToHHMM(derived.startDeadlineMinutes)),
     upload_window_open: derived.uploadWindowOpen,
+    upload_window_end: derived.uploadDeadlineMinutes == null ? null : formatHHMM(minutesToHHMM(derived.uploadDeadlineMinutes)),
+    study_remaining_minutes: derived.studyRemainingMinutes,
+    study_warning: derived.studyRemainingMinutes != null && derived.studyRemainingMinutes <= 15,
     requires_student_attendance: derived.managerType === 'SELF',
     image_urls: derived.images,
     image_url: derived.images[0] || '',
@@ -286,19 +315,71 @@ router.get('/today', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/study/week?week_start=YYYY-MM-DD  (Monday date)
+router.get('/week', authenticateToken, async (req, res) => {
+  try {
+    const student_id = req.user.student_id;
+    const week_start = req.query.week_start;
+
+    if (!week_start || !/^\d{4}-\d{2}-\d{2}$/.test(week_start)) {
+      return res.status(400).json({ error: 'week_start query param is required (YYYY-MM-DD Monday date).' });
+    }
+
+    const monday = parseDate(week_start);
+    if (!monday || monday.getDay() !== 1) {
+      return res.status(400).json({ error: 'week_start must be a Monday date.' });
+    }
+
+    const dates = getWeekDates(monday);
+
+    const { data: hours, error } = await supabase
+      .from('study_hours')
+      .select('*')
+      .eq('student_id', student_id)
+      .in('date', dates)
+      .order('date', { ascending: true })
+      .order('hour_number', { ascending: true });
+
+    if (error) throw error;
+
+    const clock = getClockContext(null);
+    const byDate = {};
+    dates.forEach((d) => { byDate[d] = []; });
+    (hours || []).forEach((hour) => {
+      if (byDate[hour.date]) {
+        byDate[hour.date].push(formatHourResponse(hour, clock.totalMinutes));
+      }
+    });
+
+    res.json({ week_start, dates, by_date: byDate });
+  } catch (err) {
+    console.error('Error fetching week data:', err);
+    res.status(500).json({ error: 'Failed to fetch week data.' });
+  }
+});
+
 // POST /api/study/schedule
 router.post('/schedule', authenticateToken, async (req, res) => {
   try {
-    const isTeacher = req.user && req.user.role === 'teacher';
-    const student_id = isTeacher && req.body.student_id ? req.body.student_id : req.user.student_id;
-    const date = getTodayDateString(req.body.date);
-    const slots = Array.isArray(req.body.slots) ? req.body.slots : [];
-
-    if (!isAllowedScheduleDate(date)) {
-      return res.status(400).json({
-        error: 'Schedules can only be created for Monday to Saturday. Sunday is reserved for review.'
-      });
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can create weekly study plans.' });
     }
+
+    const student_id = req.user.student_id;
+    const today = new Date();
+    if (today.getDay() !== 0) {
+      return res.status(403).json({ error: 'Weekly slot booking is available on Sundays only.' });
+    }
+
+    const expectedWeekStart = new Date(today);
+    expectedWeekStart.setDate(today.getDate() + 1);
+    const requestedWeekStart = parseDate(req.body.week_start);
+    if (!requestedWeekStart || formatDate(requestedWeekStart) !== formatDate(expectedWeekStart)) {
+      return res.status(400).json({ error: `Book slots for the upcoming week starting ${formatDate(expectedWeekStart)}.` });
+    }
+
+    const weekDates = getWeekDates(requestedWeekStart);
+    const slots = Array.isArray(req.body.slots) ? req.body.slots : [];
 
     if (slots.length !== 4) {
       return res.status(400).json({ error: 'Exactly 4 study slots are required.' });
@@ -308,13 +389,13 @@ router.post('/schedule', authenticateToken, async (req, res) => {
       .from('study_hours')
       .select('*')
       .eq('student_id', student_id)
-      .eq('date', date);
+      .in('date', weekDates);
 
     if (existingError) throw existingError;
 
-    const existingMap = new Map((existingRows || []).map((row) => [row.hour_number, row]));
+    const existingMap = new Map((existingRows || []).map((row) => [`${row.date}-${row.hour_number}`, row]));
 
-    const rowsToUpsert = slots.map((slot, index) => {
+    const normalizedSlots = slots.map((slot, index) => {
       const hour_number = index + 1;
       const subject = (slot.subject || '').trim();
       const plannedStart = slot.planned_start;
@@ -336,74 +417,49 @@ router.post('/schedule', authenticateToken, async (req, res) => {
         throw new Error(`End time must be later than start time for Slot ${hour_number}.`);
       }
 
-      const existingRow = existingMap.get(hour_number);
+      return {
+        hour_number,
+        subject,
+        plannedStart,
+        plannedEnd,
+        managerType
+      };
+    });
+
+    const rowsToUpsert = weekDates.flatMap((date) => normalizedSlots.map((slot) => {
+      const existingRow = existingMap.get(`${date}-${slot.hour_number}`);
       const existingPayload = existingRow ? parseStoredHourPayload(existingRow.image_url) : null;
       const existingMatchesIncoming = existingRow && (
-        existingRow.subject === subject &&
-        (existingPayload?.managerType || 'SELF') === managerType &&
-        existingPayload?.plannedStart === plannedStart &&
-        existingPayload?.plannedEnd === plannedEnd
+        existingRow.subject === slot.subject &&
+        (existingPayload?.managerType || 'SELF') === slot.managerType &&
+        existingPayload?.plannedStart === slot.plannedStart &&
+        existingPayload?.plannedEnd === slot.plannedEnd
       );
 
-      if (
-        existingPayload &&
-        (
-          existingPayload.attendanceStatus === 'PRESENT' ||
-          (Array.isArray(existingPayload.images) && existingPayload.images.length > 0)
-        )
-      ) {
-        if (!existingMatchesIncoming && !isTeacher) {
-          throw new Error(`Slot ${hour_number} is already active or has uploaded proof, so it cannot be rescheduled.`);
-        }
-
-        if (!existingMatchesIncoming && isTeacher) {
-          return {
-            student_id,
-            date,
-            hour_number,
-            subject,
-            time_slot: buildTimeRangeLabel(plannedStart, plannedEnd),
-            image_url: serializeHourPayload({
-              images: [],
-              managerType,
-              attendanceStatus: managerType === 'PARENT' ? 'PARENT' : 'PENDING',
-              attendanceMarkedAt: null,
-              plannedStart,
-              plannedEnd,
-              actualStart: null,
-              actualEnd: null
-            })
-          };
-        }
-
-        return {
-          student_id,
-          date,
-          hour_number,
-          subject: existingRow.subject,
-          time_slot: existingRow.time_slot,
-          image_url: existingRow.image_url
-        };
+      if (existingPayload && (existingPayload.attendanceStatus === 'PRESENT' || existingPayload.images.length > 0) && !existingMatchesIncoming) {
+        throw new Error(`The ${date} Slot ${slot.hour_number} already has activity and cannot be changed.`);
       }
+
+      if (existingMatchesIncoming) return existingRow;
 
       return {
         student_id,
         date,
-        hour_number,
-        subject,
-        time_slot: buildTimeRangeLabel(plannedStart, plannedEnd),
+        hour_number: slot.hour_number,
+        subject: slot.subject,
+        time_slot: buildTimeRangeLabel(slot.plannedStart, slot.plannedEnd),
         image_url: serializeHourPayload({
           images: existingPayload?.images || [],
-          managerType,
-          attendanceStatus: managerType === 'PARENT' ? 'PARENT' : 'PENDING',
+          managerType: slot.managerType,
+          attendanceStatus: slot.managerType === 'PARENT' ? 'PARENT' : 'PENDING',
           attendanceMarkedAt: null,
-          plannedStart,
-          plannedEnd,
+          plannedStart: slot.plannedStart,
+          plannedEnd: slot.plannedEnd,
           actualStart: null,
           actualEnd: null
         })
       };
-    });
+    }));
 
     const { error: upsertError } = await supabase
       .from('study_hours')
@@ -415,14 +471,15 @@ router.post('/schedule', authenticateToken, async (req, res) => {
       .from('study_hours')
       .select('*')
       .eq('student_id', student_id)
-      .eq('date', date)
+      .in('date', weekDates)
+      .order('date', { ascending: true })
       .order('hour_number', { ascending: true });
 
     if (fetchError) throw fetchError;
 
     res.json({
-      message: 'Student schedule saved successfully.',
-      date,
+      message: 'Weekly study plan saved successfully.',
+      week_start: formatDate(requestedWeekStart),
       hours: (savedRows || []).map((hour) => formatHourResponse(hour, -1))
     });
   } catch (err) {
@@ -468,13 +525,13 @@ router.post('/slots/:hourNumber/mark', authenticateToken, async (req, res) => {
 
     if (!derived.markButtonEnabled) {
       return res.status(400).json({
-        error: `Attendance can only be marked between ${derived.plannedLabel}.`,
+        error: `Start can only be marked during the 15-minute window from ${derived.plannedLabel.split(' - ')[0]} to ${formatHHMM(minutesToHHMM(derived.startDeadlineMinutes))}.`,
         attendance_status: derived.attendanceStatus
       });
     }
 
     const actualStart = clock.hhmm;
-    const actualEnd = minutesToHHMM(clock.totalMinutes + 60);
+    const actualEnd = minutesToHHMM(clock.totalMinutes + STUDY_DURATION_MINUTES);
     const displayTime = formatHHMM(actualStart);
 
     const updatedPayload = {
@@ -547,7 +604,7 @@ router.post('/slots/:hourNumber/upload', authenticateToken, upload.array('images
 
       if (!derived.uploadWindowOpen) {
         return res.status(400).json({
-          error: `Photo upload is only allowed during the active slot time ${derived.activeLabel || derived.plannedLabel}.`
+          error: `Photo upload is available for 15 minutes after the study session ends, until ${formatHHMM(minutesToHHMM(derived.uploadDeadlineMinutes))}.`
         });
       }
     }

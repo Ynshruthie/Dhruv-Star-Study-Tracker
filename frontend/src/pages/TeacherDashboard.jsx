@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import api from '../utils/api';
+import { AuthContext } from '../context/AuthContext';
 import StatusBadge from '../components/StatusBadge';
 import ImageModal from '../components/ImageModal';
 import { 
   Users, CheckCircle2, Clock, XCircle, Search, 
   Calendar, RefreshCw, BookOpen, Camera,
-  UserPlus, Trash2, Eye, EyeOff, AlertCircle, ChevronDown, ChevronUp
+  UserPlus, Trash2, Eye, EyeOff, AlertCircle, Pencil, Save, X
 } from 'lucide-react';
 
+const TAB_STORAGE_KEY = 'dhruv_teacher_dashboard_tab';
+
 export const TeacherDashboard = () => {
+  const { user } = useContext(AuthContext);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -21,13 +25,19 @@ export const TeacherDashboard = () => {
   const [activeModalStudent, setActiveModalStudent] = useState('');
 
   // Admin panel state
-  const [adminOpen, setAdminOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem(TAB_STORAGE_KEY) || 'monitor');
   const [newName, setNewName] = useState('');
   const [newStudentId, setNewStudentId] = useState('');
+  const [newMentor, setNewMentor] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [adminMsg, setAdminMsg] = useState(null); // { type: 'success'|'error', text: '' }
   const [addingStudent, setAddingStudent] = useState(false);
+  const [editingStudentId, setEditingStudentId] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editMentor, setEditMentor] = useState('');
+  const [editPassword, setEditPassword] = useState('');
+  const [savingStudent, setSavingStudent] = useState(false);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -53,11 +63,13 @@ export const TeacherDashboard = () => {
       const res = await api.post('/teacher/students', {
         name: newName.trim(),
         student_id: newStudentId.trim(),
+        mentor: newMentor.trim(),
         password: newPassword
       });
       setAdminMsg({ type: 'success', text: res.data.message });
       setNewName('');
       setNewStudentId('');
+      setNewMentor('');
       setNewPassword('');
       // Refresh dashboard to show new student in the roster
       fetchDashboard();
@@ -79,6 +91,48 @@ export const TeacherDashboard = () => {
     } catch (err) {
       setAdminMsg({ type: 'error', text: err.response?.data?.error || 'Failed to delete student.' });
     }
+  };
+
+  const beginEditStudent = (student) => {
+    setEditingStudentId(student.student_id);
+    setEditName(student.name);
+    setEditMentor(student.mentor || '');
+    setEditPassword('');
+    setAdminMsg(null);
+  };
+
+  const cancelEditStudent = () => {
+    setEditingStudentId(null);
+    setEditPassword('');
+  };
+
+  const handleUpdateStudent = async (event, studentId) => {
+    event.preventDefault();
+    setSavingStudent(true);
+    setAdminMsg(null);
+    try {
+      const response = await api.put(`/teacher/students/${encodeURIComponent(studentId)}`, {
+        name: editName.trim(),
+        mentor: editMentor.trim(),
+        password: editPassword
+      });
+      setAdminMsg({ type: 'success', text: response.data.message });
+      cancelEditStudent();
+      fetchDashboard();
+    } catch (err) {
+      const serverMessage = err.response?.data?.error;
+      const statusMessage = err.response?.status
+        ? ` (server returned ${err.response.status})`
+        : ' (backend unavailable)';
+      setAdminMsg({ type: 'error', text: serverMessage || `Failed to update student${statusMessage}.` });
+    } finally {
+      setSavingStudent(false);
+    }
+  };
+
+  const switchTab = (tab) => {
+    localStorage.setItem(TAB_STORAGE_KEY, tab);
+    setActiveTab(tab);
   };
 
   if (loading) {
@@ -104,12 +158,21 @@ export const TeacherDashboard = () => {
     if (statusFilter === 'SUBMITTED') return st.overallStatus === 'Submitted';
     if (statusFilter === 'PENDING') return st.overallStatus === 'Pending';
     if (statusFilter === 'ABSENT') return st.overallStatus === 'Absent';
+    if (statusFilter === 'MENTEES') {
+      return Boolean(st.mentor) &&
+        st.mentor.toUpperCase() === user?.student_id?.toUpperCase();
+    }
     return true;
   });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      
+      <div className="clean-card p-2 inline-flex gap-2">
+        <button type="button" onClick={() => switchTab('monitor')} className={`px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition ${activeTab === 'monitor' ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50'}`}><Users className="w-4 h-4" /><span>Teacher Dashboard</span></button>
+        <button type="button" onClick={() => switchTab('admin')} className={`px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition ${activeTab === 'admin' ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50'}`}><UserPlus className="w-4 h-4" /><span>Admin Dashboard</span></button>
+      </div>
+
+      {activeTab === 'monitor' && <>
       {/* Header Banner */}
       <div className="clean-card p-6 flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -222,7 +285,8 @@ export const TeacherDashboard = () => {
             { id: 'ALL', label: 'All Students' },
             { id: 'SUBMITTED', label: '✅ Submitted (4/4)' },
             { id: 'PENDING', label: '⏳ Pending (<4)' },
-            { id: 'ABSENT', label: '❌ Absent' }
+            { id: 'ABSENT', label: '❌ Absent' },
+            { id: 'MENTEES', label: '👥 Mentees' }
           ].map((btn) => (
             <button
               key={btn.id}
@@ -246,11 +310,11 @@ export const TeacherDashboard = () => {
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
                 <th className="py-4 px-6">Student Name &amp; ID</th>
-                <th className="py-4 px-6">Daily Slot Attendance</th>
-                <th className="py-4 px-6 text-center">Hour 1</th>
-                <th className="py-4 px-6 text-center">Hour 2</th>
-                <th className="py-4 px-6 text-center">Hour 3</th>
-                <th className="py-4 px-6 text-center">Hour 4</th>
+                <th className="py-4 px-6">Daily Overview</th>
+                <th className="py-4 px-6 text-center">Slot 1</th>
+                <th className="py-4 px-6 text-center">Slot 2</th>
+                <th className="py-4 px-6 text-center">Slot 3</th>
+                <th className="py-4 px-6 text-center">Slot 4</th>
                 <th className="py-4 px-6 text-right">Overall Status</th>
               </tr>
             </thead>
@@ -264,7 +328,9 @@ export const TeacherDashboard = () => {
                 </tr>
               ) : (
                 filteredStudents.map((st) => {
-                  const isPresent = st.attendance.marked && st.attendance.status === 'PRESENT';
+                  const startedSlots = st.hours.filter((hour) => hour.attendance_status === 'PRESENT').length;
+                  const missedSlots = st.hours.filter((hour) => hour.attendance_status === 'ABSENT').length;
+                  const parentSlots = st.hours.filter((hour) => hour.manager_type === 'PARENT').length;
 
                   return (
                     <tr key={st.id} className="hover:bg-slate-50/80 transition">
@@ -275,27 +341,20 @@ export const TeacherDashboard = () => {
                         <div className="font-mono text-slate-500 text-xs">{st.student_id}</div>
                       </td>
 
-                      {/* Attendance Column */}
+                      {/* Daily Overview */}
                       <td className="py-4 px-6">
-                        {isPresent ? (
-                          <div className="space-y-1">
-                            <StatusBadge status="PRESENT" type="attendance" size="small" />
-                            <div className="text-[11px] text-slate-500 font-mono">
-                              Marked: {st.attendance.time}
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <StatusBadge status="ABSENT" type="attendance" size="small" />
-                            <div className="text-[11px] text-rose-600 font-medium">Missed window</div>
-                          </div>
-                        )}
+                        <div className="space-y-1 text-[11px] font-medium">
+                          <div className="text-emerald-700">{startedSlots} self slot{startedSlots === 1 ? '' : 's'} started</div>
+                          {missedSlots > 0 && <div className="text-rose-600">{missedSlots} start window{missedSlots === 1 ? '' : 's'} missed</div>}
+                          {parentSlots > 0 && <div className="text-violet-700">{parentSlots} parent-managed</div>}
+                          {!startedSlots && !missedSlots && !parentSlots && <div className="text-slate-500">No slots scheduled</div>}
+                        </div>
                       </td>
 
                       {/* Hour 1 .. 4 Columns */}
                       {st.hours.map((h) => (
                         <td key={h.hour_number} className="py-4 px-6 text-center">
-                          {h.completed ? (
+                          {h.completed ? h.photo_count > 0 ? (
                             <button
                               onClick={() => {
                                 setActiveModalHour(h);
@@ -310,9 +369,18 @@ export const TeacherDashboard = () => {
                               <span className="text-[10px] text-slate-500 font-mono truncate max-w-20">
                                 {h.subject}
                               </span>
+                              <span className="text-[10px] text-slate-500 leading-tight">{h.active_time_slot || h.planned_time_slot}</span>
+                              <span className="text-[10px] text-slate-500 max-w-28 leading-tight">{h.timing_label}</span>
                             </button>
                           ) : (
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 font-bold text-xs" title="Study hour not submitted">
+                            <div className="inline-flex max-w-32 flex-col items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-2" title={h.timing_label}>
+                              <span className={`text-xs font-bold ${h.attendance_status === 'ABSENT' ? 'text-rose-600' : h.attendance_status === 'PRESENT' ? 'text-blue-700' : h.manager_type === 'PARENT' ? 'text-violet-700' : 'text-amber-700'}`}>{h.subject}</span>
+                              <span className="text-[10px] text-slate-500 leading-tight">{h.active_time_slot || h.planned_time_slot}</span>
+                              <span className="text-[10px] text-slate-600 leading-tight">{h.timing_label}</span>
+                              <span className="text-[10px] text-slate-400">No proof yet</span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 font-bold text-xs" title="Slot not scheduled">
                               ❌
                             </span>
                           )}
@@ -333,27 +401,14 @@ export const TeacherDashboard = () => {
         </div>
       </div>
 
-      {/* ADMIN PANEL: ADD / MANAGE STUDENTS */}
-      <div className="clean-card overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setAdminOpen(!adminOpen)}
-          className="w-full flex items-center justify-between p-5 hover:bg-slate-50 transition cursor-pointer"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-purple-50 border border-purple-200 flex items-center justify-center">
-              <UserPlus className="w-4.5 h-4.5 text-purple-700" />
-            </div>
-            <div className="text-left">
-              <h3 className="text-sm font-bold text-slate-900">Admin Panel — Manage Students</h3>
-              <p className="text-xs text-slate-500">Add new students or remove existing ones</p>
-            </div>
-          </div>
-          {adminOpen ? <ChevronUp className="w-5 h-5 text-slate-400" /> : <ChevronDown className="w-5 h-5 text-slate-400" />}
-        </button>
+      </>}
 
-        {adminOpen && (
-          <div className="border-t border-slate-200 p-5 space-y-6">
+      {activeTab === 'admin' && <div className="clean-card overflow-hidden">
+          <div className="p-6 border-b border-slate-200 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center"><UserPlus className="w-5 h-5 text-purple-700" /></div>
+            <div><h1 className="text-xl font-extrabold text-slate-900">Admin Dashboard</h1><p className="text-sm text-slate-500">Add students and manage the enrolled student roster.</p></div>
+          </div>
+          <div className="p-5 space-y-6">
 
             {/* Success / Error Message */}
             {adminMsg && (
@@ -374,7 +429,7 @@ export const TeacherDashboard = () => {
             <form onSubmit={handleAddStudent} className="space-y-4">
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Create New Student Account</h4>
               
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1.5">Student Name *</label>
                   <input
@@ -397,6 +452,20 @@ export const TeacherDashboard = () => {
                     onChange={(e) => setNewStudentId(e.target.value.toUpperCase())}
                     placeholder="e.g. STU006"
                     className="w-full h-10 px-3 bg-white border border-slate-300 rounded-lg text-sm text-slate-900 font-mono placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">Mentor ID *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newMentor}
+                    onChange={(e) => setNewMentor(e.target.value.toUpperCase())}
+                    placeholder="e.g. TCH001 (teacher ID)"
+                    pattern="[A-Za-z0-9_-]+"
+                    title="Enter an existing teacher's ID, not their name."
+                    className="w-full h-10 px-3 bg-white border border-slate-300 rounded-lg text-sm font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
                   />
                 </div>
 
@@ -441,28 +510,29 @@ export const TeacherDashboard = () => {
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Enrolled Students ({students.length})</h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {students.map(st => (
-                  <div key={st.student_id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-200">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-800">{st.name}</div>
-                      <div className="text-[11px] font-mono text-slate-500">{st.student_id}</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteStudent(st.student_id, st.name)}
-                      className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
-                      title={`Remove ${st.name}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                {students.map((student) => (
+                  <div key={student.student_id} className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                    {editingStudentId === student.student_id ? (
+                      <form onSubmit={(event) => handleUpdateStudent(event, student.student_id)} className="space-y-3">
+                        <div className="text-xs font-mono text-slate-500">{student.student_id}</div>
+                        <input value={editName} onChange={(event) => setEditName(event.target.value)} required aria-label="Student name" className="w-full h-9 px-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                        <input value={editMentor} onChange={(event) => setEditMentor(event.target.value.toUpperCase())} required placeholder="Mentor ID (teacher ID)" aria-label="Mentor ID" pattern="[A-Za-z0-9_-]+" title="Enter an existing teacher's ID, not their name." className="w-full h-9 px-2.5 rounded-lg border border-slate-300 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                        <input type="password" value={editPassword} onChange={(event) => setEditPassword(event.target.value)} placeholder="New password (optional)" aria-label="New password" minLength={6} className="w-full h-9 px-2.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500" />
+                        <div className="flex gap-2"><button type="submit" disabled={savingStudent} className="inline-flex items-center gap-1 rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Save className="w-3.5 h-3.5" />{savingStudent ? 'Saving...' : 'Save'}</button><button type="button" onClick={cancelEditStudent} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-600"><X className="w-3.5 h-3.5" />Cancel</button></div>
+                      </form>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <div><div className="text-sm font-semibold text-slate-800">{student.name}</div><div className="text-[11px] font-mono text-slate-500">{student.student_id}</div><div className="text-[11px] text-purple-700">Mentor ID: {student.mentor || 'Not assigned'}</div></div>
+                        <div className="flex items-center gap-1"><button type="button" onClick={() => beginEditStudent(student)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-purple-700 hover:bg-purple-50 transition" title={`Edit ${student.name}`}><Pencil className="w-3.5 h-3.5" /></button><button type="button" onClick={() => handleDeleteStudent(student.student_id, student.name)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title={`Remove ${student.name}`}><Trash2 className="w-4 h-4" /></button></div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
 
           </div>
-        )}
-      </div>
+      </div>}
 
       {/* Lightbox Viewer */}
       <ImageModal

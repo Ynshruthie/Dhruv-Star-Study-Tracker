@@ -39,7 +39,9 @@ router.post('/login', async (req, res) => {
       role: user.role
     };
 
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+    // Keep a returning user signed in across app restarts. They can still use
+    // Logout at any time, and invalid/expired tokens are rejected by the API.
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
 
     res.json({
       message: 'Login successful',
@@ -122,7 +124,7 @@ router.post('/teacher-signup', async (req, res) => {
       name: newUser.name,
       role: newUser.role
     };
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
 
     res.status(201).json({
       message: 'Teacher account created successfully!',
