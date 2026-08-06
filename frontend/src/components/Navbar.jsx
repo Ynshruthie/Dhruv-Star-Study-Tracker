@@ -1,6 +1,6 @@
 import React, { useContext, useState, useEffect } from 'react';
-import { AuthContext } from '../context/AuthContext';
-import { Star, LogOut, ShieldCheck, Clock, GraduationCap } from 'lucide-react';
+import { AuthContext } from '../context/AuthContextDefinition';
+import { LogOut, ShieldCheck, Clock, GraduationCap } from 'lucide-react';
 
 export const Navbar = () => {
   const { user, logout, simulatedTime } = useContext(AuthContext);

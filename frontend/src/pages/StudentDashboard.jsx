@@ -1,5 +1,5 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { AuthContext } from '../context/AuthContextDefinition';
 import api from '../utils/api';
 import ImageModal from '../components/ImageModal';
 import { AlertCircle, BookOpen, CalendarClock, CheckCircle2, Clock3, ImagePlus, Play, Save, Timer, Upload } from 'lucide-react';
@@ -67,7 +67,7 @@ export const StudentDashboard = () => {
   const [now, setNow] = useState(Date.now());
   const bookingOpen = new Date().getDay() === 0;
 
-  const fetchToday = async () => {
+  const fetchToday = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await api.get('/study/today');
@@ -82,9 +82,9 @@ export const StudentDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchWeeklyPlan = async () => {
+  const fetchWeeklyPlan = useCallback(async () => {
     try {
       const { data } = await api.get(`/study/week?week_start=${weekStart}`);
       const firstScheduledDay = data.dates.find((day) => {
@@ -107,17 +107,17 @@ export const StudentDashboard = () => {
       console.error('Failed to load weekly plan:', err);
       setError('Failed to load the upcoming weekly plan.');
     }
-  };
+  }, [weekStart]);
 
   useEffect(() => {
     fetchToday();
     if (bookingOpen) fetchWeeklyPlan();
-  }, [simulatedTime, weekStart, bookingOpen]);
+  }, [bookingOpen, fetchToday, fetchWeeklyPlan, simulatedTime, weekStart]);
 
   useEffect(() => {
     const refreshTimer = window.setInterval(fetchToday, 60_000);
     return () => window.clearInterval(refreshTimer);
-  }, [simulatedTime]);
+  }, [fetchToday, simulatedTime]);
 
   useEffect(() => {
     const clockTimer = window.setInterval(() => setNow(Date.now()), 1_000);

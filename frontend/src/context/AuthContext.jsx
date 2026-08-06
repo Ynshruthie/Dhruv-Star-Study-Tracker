@@ -1,7 +1,6 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
-
-export const AuthContext = createContext();
+import { AuthContext } from './AuthContextDefinition';
 const TOKEN_STORAGE_KEY = 'dhruv_token';
 const USER_STORAGE_KEY = 'dhruv_user';
 

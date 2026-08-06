@@ -1,5 +1,5 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { AuthContext } from '../context/AuthContextDefinition';
 import api from '../utils/api';
 import ImageModal from '../components/ImageModal';
 import { AlertCircle, CalendarClock, CheckCircle2, Clock3, ImagePlus, Upload, Users } from 'lucide-react';
@@ -26,7 +26,7 @@ export const ParentDashboard = () => {
   const [week, setWeek] = useState({ dates: [], by_date: {} });
   const [weekStart] = useState(getReviewWeekStart);
 
-  const fetchSlots = async () => {
+  const fetchSlots = useCallback(async () => {
     setLoading(true);
     setError('');
 
@@ -41,9 +41,9 @@ export const ParentDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchWeeklyStudy = async () => {
+  const fetchWeeklyStudy = useCallback(async () => {
     try {
       const { data } = await api.get(`/study/week?week_start=${weekStart}`);
       setWeek({ dates: data.dates || [], by_date: data.by_date || {} });
@@ -51,12 +51,12 @@ export const ParentDashboard = () => {
       console.error('Failed to load weekly study summary:', err);
       setError('Failed to load the weekly study summary.');
     }
-  };
+  }, [weekStart]);
 
   useEffect(() => {
     fetchSlots();
     fetchWeeklyStudy();
-  }, [simulatedTime]);
+  }, [fetchSlots, fetchWeeklyStudy, simulatedTime]);
 
   const totalPhotos = useMemo(
     () => hours.reduce((sum, hour) => sum + (hour.photo_count || 0), 0),

@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import api from '../utils/api';
-import { AuthContext } from '../context/AuthContext';
+import { AuthContext } from '../context/AuthContextDefinition';
 import StatusBadge from '../components/StatusBadge';
 import ImageModal from '../components/ImageModal';
 import { 
@@ -44,7 +44,7 @@ export const TeacherDashboard = () => {
   const [editSlotEnd, setEditSlotEnd] = useState('');
   const [savingSlot, setSavingSlot] = useState(false);
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get(`/teacher/dashboard?date=${selectedDate}`);
@@ -54,11 +54,11 @@ export const TeacherDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedDate]);
 
   useEffect(() => {
     fetchDashboard();
-  }, [selectedDate]);
+  }, [fetchDashboard]);
 
   const handleAddStudent = async (e) => {
     e.preventDefault();

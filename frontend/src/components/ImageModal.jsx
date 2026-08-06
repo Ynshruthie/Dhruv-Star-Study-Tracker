@@ -1,8 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { X, ExternalLink, BookOpen, Clock, Calendar, CheckCircle, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, BookOpen, Clock, Calendar, CheckCircle, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 
 export const ImageModal = ({ isOpen, onClose, hourData, studentName }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const images = hourData?.image_urls || (hourData?.image_url ? [hourData.image_url] : []);
+
+  const handleNext = useCallback(() => {
+    setCurrentIndex((index) => Math.min(index + 1, images.length - 1));
+  }, [images.length]);
+
+  const handlePrev = useCallback(() => {
+    setCurrentIndex((index) => Math.max(index - 1, 0));
+  }, []);
 
   // Reset index when modal opens or hourData changes
   useEffect(() => {
@@ -21,25 +30,12 @@ export const ImageModal = ({ isOpen, onClose, hourData, studentName }) => {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, currentIndex, hourData]);
+  }, [isOpen, onClose, handleNext, handlePrev]);
 
   if (!isOpen || !hourData) return null;
 
-  const images = hourData.image_urls || (hourData.image_url ? [hourData.image_url] : []);
   const hasImages = images.length > 0;
   const currentImage = images[currentIndex];
-
-  const handleNext = () => {
-    if (currentIndex < images.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    }
-  };
-
-  const handlePrev = () => {
-    if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-in fade-in duration-150">

@@ -1,5 +1,6 @@
 import React, { useContext } from 'react';
-import { AuthProvider, AuthContext } from './context/AuthContext';
+import { AuthProvider } from './context/AuthContext';
+import { AuthContext } from './context/AuthContextDefinition';
 import Navbar from './components/Navbar';
 import LoginPage from './pages/LoginPage';
 import FamilyDashboard from './pages/FamilyDashboard';
