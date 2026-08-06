@@ -154,6 +154,8 @@ export const StudentDashboard = () => {
     [hours]
   );
 
+  const slotsLocked = scheduledCount === 4;
+
   const selfCount = useMemo(
     () => formSlots.filter((slot) => slot.manager_type === 'SELF').length,
     [formSlots]
@@ -287,7 +289,7 @@ export const StudentDashboard = () => {
       )}
 
       <form onSubmit={handleSaveSchedule} className="space-y-6">
-        <div className="clean-card p-6 space-y-4">
+        <div className={`clean-card p-6 space-y-4 ${slotsLocked ? 'opacity-80' : ''}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-slate-900">Create Your 4 Slots</h2>
@@ -302,9 +304,16 @@ export const StudentDashboard = () => {
             </div>
           </div>
 
+          {slotsLocked && (
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600" />
+              <span>All 4 slots have been saved and are <strong>locked for today</strong>. They cannot be changed.</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {formSlots.map((slot, index) => (
-              <div key={index} className="rounded-2xl border border-slate-200 p-5 space-y-4 bg-white">
+              <div key={index} className={`rounded-2xl border p-5 space-y-4 ${slotsLocked ? 'border-slate-200 bg-slate-50' : 'border-slate-200 bg-white'}`}>
                 <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-xs">
@@ -312,7 +321,7 @@ export const StudentDashboard = () => {
                     </div>
                     <div>
                       <div className="text-sm font-bold text-slate-900">Slot {index + 1}</div>
-                      <div className="text-xs text-slate-500">Choose subject, time and owner</div>
+                      <div className="text-xs text-slate-500">{slotsLocked ? 'Locked — saved for today' : 'Choose subject, time and owner'}</div>
                     </div>
                   </div>
 
@@ -330,7 +339,8 @@ export const StudentDashboard = () => {
                   <select
                     value={slot.subject}
                     onChange={(event) => updateFormSlot(index, 'subject', event.target.value)}
-                    className="w-full corporate-select text-sm"
+                    disabled={slotsLocked}
+                    className={`w-full corporate-select text-sm ${slotsLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                   >
                     {SUBJECT_OPTIONS.map((subject) => (
                       <option key={subject} value={subject}>{subject}</option>
@@ -345,7 +355,8 @@ export const StudentDashboard = () => {
                       type="time"
                       value={slot.planned_start}
                       onChange={(event) => updateFormSlot(index, 'planned_start', event.target.value)}
-                      className="w-full corporate-input text-sm"
+                      disabled={slotsLocked}
+                      className={`w-full corporate-input text-sm ${slotsLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                     />
                   </div>
 
@@ -355,7 +366,8 @@ export const StudentDashboard = () => {
                       type="time"
                       value={slot.planned_end}
                       onChange={(event) => updateFormSlot(index, 'planned_end', event.target.value)}
-                      className="w-full corporate-input text-sm"
+                      disabled={slotsLocked}
+                      className={`w-full corporate-input text-sm ${slotsLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                     />
                   </div>
                 </div>
@@ -366,10 +378,13 @@ export const StudentDashboard = () => {
                     <button
                       type="button"
                       onClick={() => updateFormSlot(index, 'manager_type', 'SELF')}
+                      disabled={slotsLocked}
                       className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
-                        slot.manager_type === 'SELF'
-                          ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                        slotsLocked
+                          ? 'cursor-not-allowed opacity-60 ' + (slot.manager_type === 'SELF' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-600')
+                          : slot.manager_type === 'SELF'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex items-center justify-center gap-2">
@@ -381,10 +396,13 @@ export const StudentDashboard = () => {
                     <button
                       type="button"
                       onClick={() => updateFormSlot(index, 'manager_type', 'PARENT')}
+                      disabled={slotsLocked}
                       className={`rounded-xl border px-4 py-3 text-sm font-semibold transition ${
-                        slot.manager_type === 'PARENT'
-                          ? 'border-amber-500 bg-amber-50 text-amber-700'
-                          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                        slotsLocked
+                          ? 'cursor-not-allowed opacity-60 ' + (slot.manager_type === 'PARENT' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-600')
+                          : slot.manager_type === 'PARENT'
+                            ? 'border-amber-500 bg-amber-50 text-amber-700'
+                            : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
                       }`}
                     >
                       <div className="flex items-center justify-center gap-2">
@@ -400,16 +418,18 @@ export const StudentDashboard = () => {
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-sm text-slate-500">
-              Save once after choosing all 4 slots. Parent slots will appear in the Parent Dashboard immediately.
+              {slotsLocked
+                ? '✅ Slots are locked for today. No further changes allowed.'
+                : 'Save once after choosing all 4 slots. Parent slots will appear in the Parent Dashboard immediately.'}
             </div>
 
             <button
               type="submit"
-              disabled={savingSchedule}
+              disabled={savingSchedule || slotsLocked}
               className="px-6 py-3 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-md transition flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Save className="w-4 h-4" />
-              <span>{savingSchedule ? 'Saving Slots...' : 'Save 4 Slots'}</span>
+              <span>{savingSchedule ? 'Saving Slots...' : slotsLocked ? 'Slots Saved ✓' : 'Save 4 Slots'}</span>
             </button>
           </div>
         </div>
@@ -474,10 +494,7 @@ export const StudentDashboard = () => {
                   <span>Scheduled Window: <span className="font-mono text-slate-900">{hour.scheduled_time_slot || '--'}</span></span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <TimerReset className="w-4 h-4 text-slate-400" />
-                  <span>Attendance Clicked At: <span className="font-mono text-slate-900">{hour.attendance_marked_at || '--'}</span></span>
-                </div>
+
 
                 <div className="flex items-center gap-2">
                   <ImagePlus className="w-4 h-4 text-slate-400" />
@@ -497,26 +514,11 @@ export const StudentDashboard = () => {
                 </div>
               )}
 
-              {!unscheduled && isSelfManaged && hour.attendance_status === 'ABSENT' && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-                  This Self slot closed before attendance was marked, so it is absent.
-                </div>
-              )}
+
 
               {isSelfManaged ? (
                 <div className="flex flex-col gap-3">
-                  <button
-                    type="button"
-                    disabled={!hour.mark_button_enabled || markingHour === hour.hour_number || unscheduled}
-                    onClick={() => handleMarkPresent(hour.hour_number)}
-                    className={`w-full px-4 py-3 rounded-xl font-bold text-sm transition ${
-                      hour.mark_button_enabled
-                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
-                    }`}
-                  >
-                    {markingHour === hour.hour_number ? 'Starting Slot...' : 'Mark Present'}
-                  </button>
+  
 
                   <label className={`w-full border-2 border-dashed rounded-xl px-4 py-4 flex flex-col items-center justify-center gap-2 text-center transition ${
                     canUpload
