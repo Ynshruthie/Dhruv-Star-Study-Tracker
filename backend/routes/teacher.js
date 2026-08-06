@@ -160,6 +160,8 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
         const payload = parseStoredHourPayload(h.image_url);
         booking.hours[h.hour_number] = {
           subject: h.subject,
+          planned_start: payload.plannedStart,
+          planned_end: payload.plannedEnd,
           planned_time_slot: formatTimeRange(payload.plannedStart, payload.plannedEnd)
         };
       }
@@ -227,6 +229,8 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
           manager_type: managerType,
           attendance_status: attendanceStatus,
           attendance_marked_at: payload?.attendanceMarkedAt || null,
+          planned_start: payload?.plannedStart || null,
+          planned_end: payload?.plannedEnd || null,
           planned_time_slot: hourData ? formatTimeRange(payload?.plannedStart, payload?.plannedEnd) : null,
           active_time_slot: payload?.actualStart && payload?.actualEnd ? formatTimeRange(payload.actualStart, payload.actualEnd) : null,
           timing_label: timingLabel
@@ -296,6 +300,65 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
   } catch (err) {
     console.error('Teacher dashboard error:', err);
     res.status(500).json({ error: 'Failed to fetch teacher dashboard data' });
+  }
+});
+
+// PUT /api/teacher/students/:studentId/slots/:date/:hourNumber — Adjust one booked slot for one day
+router.put('/students/:studentId/slots/:date/:hourNumber', authenticateToken, requireRole('teacher'), async (req, res) => {
+  try {
+    const studentId = decodeURIComponent(req.params.studentId || '').trim();
+    const { date, hourNumber } = req.params;
+    const { planned_start, planned_end } = req.body;
+    const hour_number = Number.parseInt(hourNumber, 10);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(hour_number) || hour_number < 1 || hour_number > 4) {
+      return res.status(400).json({ error: 'A valid date and Slot number (1–4) are required.' });
+    }
+
+    const startMinutes = hhmmToMinutes(planned_start);
+    const endMinutes = hhmmToMinutes(planned_end);
+    if (startMinutes == null || endMinutes == null || endMinutes <= startMinutes) {
+      return res.status(400).json({ error: 'End time must be later than start time.' });
+    }
+
+    const { data: slot, error: slotError } = await supabase
+      .from('study_hours')
+      .select('*')
+      .ilike('student_id', studentId)
+      .eq('date', date)
+      .eq('hour_number', hour_number)
+      .maybeSingle();
+
+    if (slotError) throw slotError;
+    if (!slot) return res.status(404).json({ error: 'This student has no booked slot for that date.' });
+
+    const payload = parseStoredHourPayload(slot.image_url);
+    if (payload.attendanceStatus === 'PRESENT' || payload.images.length > 0) {
+      return res.status(409).json({ error: 'A slot cannot be changed after attendance is marked or proof is uploaded.' });
+    }
+
+    const updatedPayload = {
+      ...payload,
+      plannedStart: planned_start,
+      plannedEnd: planned_end
+    };
+    const { error: updateError } = await supabase
+      .from('study_hours')
+      .update({
+        time_slot: formatTimeRange(planned_start, planned_end),
+        image_url: JSON.stringify(updatedPayload)
+      })
+      .eq('id', slot.id);
+
+    if (updateError) throw updateError;
+
+    res.json({
+      message: `Slot ${hour_number} updated for ${date}.`,
+      slot: { student_id: slot.student_id, date, hour_number, planned_start, planned_end }
+    });
+  } catch (err) {
+    console.error('Update student slot error:', err);
+    res.status(500).json({ error: 'Failed to update the slot time.' });
   }
 });
 

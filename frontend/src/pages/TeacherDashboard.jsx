@@ -39,6 +39,10 @@ export const TeacherDashboard = () => {
   const [editMentor, setEditMentor] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [savingStudent, setSavingStudent] = useState(false);
+  const [editingSlot, setEditingSlot] = useState(null);
+  const [editSlotStart, setEditSlotStart] = useState('');
+  const [editSlotEnd, setEditSlotEnd] = useState('');
+  const [savingSlot, setSavingSlot] = useState(false);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -128,6 +132,31 @@ export const TeacherDashboard = () => {
       setAdminMsg({ type: 'error', text: serverMessage || `Failed to update student${statusMessage}.` });
     } finally {
       setSavingStudent(false);
+    }
+  };
+
+  const openSlotEditor = (student, slot) => {
+    setEditingSlot({ studentId: student.student_id, studentName: student.name, ...slot });
+    setEditSlotStart(slot.planned_start || '');
+    setEditSlotEnd(slot.planned_end || '');
+  };
+
+  const handleSlotTimeUpdate = async (event) => {
+    event.preventDefault();
+    if (!editingSlot) return;
+    setSavingSlot(true);
+    try {
+      const { data: response } = await api.put(
+        `/teacher/students/${encodeURIComponent(editingSlot.studentId)}/slots/${editingSlot.date}/${editingSlot.hourNumber}`,
+        { planned_start: editSlotStart, planned_end: editSlotEnd }
+      );
+      setAdminMsg({ type: 'success', text: response.message });
+      setEditingSlot(null);
+      fetchDashboard();
+    } catch (err) {
+      setAdminMsg({ type: 'error', text: err.response?.data?.error || 'Failed to update the slot time.' });
+    } finally {
+      setSavingSlot(false);
     }
   };
 
@@ -375,19 +404,20 @@ export const TeacherDashboard = () => {
                               <span className="text-[10px] text-slate-500 max-w-28 leading-tight">{h.timing_label}</span>
                             </button>
                           ) : (
-                            <div className="inline-flex max-w-32 flex-col items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-2" title={h.timing_label}>
+                            <button type="button" onClick={() => openSlotEditor(st, { date: selectedDate, hourNumber: h.hour_number, subject: h.subject, planned_start: h.planned_start, planned_end: h.planned_end })} className="inline-flex max-w-32 flex-col items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-2 text-left hover:border-purple-300 hover:bg-purple-50" title="Click to adjust this slot's time">
                               <span className={`text-xs font-bold ${h.attendance_status === 'ABSENT' ? 'text-rose-600' : h.attendance_status === 'PRESENT' ? 'text-blue-700' : h.manager_type === 'PARENT' ? 'text-violet-700' : 'text-amber-700'}`}>{h.subject}</span>
                               <span className="text-[10px] text-slate-500 leading-tight">{h.active_time_slot || h.planned_time_slot}</span>
                               <span className="text-[10px] text-slate-600 leading-tight">{h.timing_label}</span>
-                              <span className="text-[10px] text-slate-400">No proof yet</span>
-                            </div>
+                              <span className="text-[10px] text-purple-600">Edit time</span>
+                            </button>
                           ) : (
                             nextBookedHour ? (
-                              <div className="inline-flex max-w-32 flex-col items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 p-2" title={`Next booked day: ${st.next_booking_date}`}>
+                              <button type="button" onClick={() => openSlotEditor(st, { date: st.next_booking_date, hourNumber: h.hour_number, subject: nextBookedHour.subject, planned_start: nextBookedHour.planned_start, planned_end: nextBookedHour.planned_end })} className="inline-flex max-w-32 flex-col items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 p-2 hover:border-purple-300 hover:bg-purple-50" title="Click to adjust this booked slot's time">
                                 <span className="text-[10px] font-bold text-blue-800">Booked · {formatBookingDate(st.next_booking_date)}</span>
                                 <span className="text-[10px] leading-tight text-blue-700">{nextBookedHour.planned_time_slot}</span>
                                 <span className="max-w-28 truncate text-[10px] text-slate-500">{nextBookedHour.subject}</span>
-                              </div>
+                                <span className="text-[10px] text-purple-600">Edit time</span>
+                              </button>
                             ) : (
                               <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 font-bold text-xs" title="Slot not scheduled">
                                 ❌
@@ -551,6 +581,20 @@ export const TeacherDashboard = () => {
         hourData={activeModalHour}
         studentName={activeModalStudent}
       />
+
+      {editingSlot && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <form onSubmit={handleSlotTimeUpdate} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <div><h2 className="text-lg font-bold text-slate-900">Adjust Slot {editingSlot.hourNumber}</h2><p className="text-sm text-slate-500">{editingSlot.studentName} · {formatBookingDate(editingSlot.date)} · {editingSlot.subject}</p></div>
+              <button type="button" onClick={() => setEditingSlot(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-4"><label className="space-y-1 text-sm font-semibold text-slate-700">Start time<input required type="time" value={editSlotStart} onChange={(event) => setEditSlotStart(event.target.value)} className="corporate-input w-full text-sm" /></label><label className="space-y-1 text-sm font-semibold text-slate-700">End time<input required type="time" value={editSlotEnd} onChange={(event) => setEditSlotEnd(event.target.value)} className="corporate-input w-full text-sm" /></label></div>
+            <p className="text-xs text-slate-500">This only changes this one day. Slots with attendance or uploaded proof cannot be changed.</p>
+            <div className="flex justify-end gap-3"><button type="button" onClick={() => setEditingSlot(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600">Cancel</button><button type="submit" disabled={savingSlot} className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{savingSlot ? 'Saving...' : 'Save time'}</button></div>
+          </form>
+        </div>
+      )}
     </div>
   );
 };
