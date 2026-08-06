@@ -130,12 +130,39 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
       .from('study_hours')
       .select('*')
       .eq('date', date);
+
+    // Also include each student's next booked day. A teacher normally views
+    // today's dashboard, while students book future Monday–Saturday slots.
+    const { data: futureStudyHours, error: futureStudyHoursError } = await supabase
+      .from('study_hours')
+      .select('*')
+      .gte('date', date)
+      .order('date', { ascending: true })
+      .order('hour_number', { ascending: true });
+
+    if (futureStudyHoursError) throw futureStudyHoursError;
+
     const hoursMap = new Map();
     (studyHours || []).forEach(h => {
       if (!hoursMap.has(h.student_id)) {
         hoursMap.set(h.student_id, {});
       }
       hoursMap.get(h.student_id)[h.hour_number] = h;
+    });
+    const nextBookingMap = new Map();
+    (futureStudyHours || []).forEach(h => {
+      const nextBooking = nextBookingMap.get(h.student_id);
+      if (!nextBooking || h.date < nextBooking.date) {
+        nextBookingMap.set(h.student_id, { date: h.date, hours: {} });
+      }
+      const booking = nextBookingMap.get(h.student_id);
+      if (booking.date === h.date) {
+        const payload = parseStoredHourPayload(h.image_url);
+        booking.hours[h.hour_number] = {
+          subject: h.subject,
+          planned_time_slot: formatTimeRange(payload.plannedStart, payload.plannedEnd)
+        };
+      }
     });
 
     let presentCount = 0;
@@ -151,6 +178,7 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
 
     const studentReport = (students || []).map(st => {
       const studentHoursObj = hoursMap.get(st.student_id) || {};
+      const nextBooking = nextBookingMap.get(st.student_id);
 
       const hours = [1, 2, 3, 4].map(hNum => {
         const hourData = studentHoursObj[hNum];
@@ -241,6 +269,8 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
         student_id: st.student_id,
         name: st.name,
         mentor: st.mentor,
+        next_booking_date: nextBooking?.date || null,
+        next_booking_hours: nextBooking ? nextBooking.hours : {},
         attendance: {
           marked: presentSlots.length > 0,
           time: presentSlots[0]?.attendance_marked_at || null,

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 const TAB_STORAGE_KEY = 'dhruv_teacher_dashboard_tab';
+const formatBookingDate = (date) => date && new Date(`${date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 export const TeacherDashboard = () => {
   const { user } = useContext(AuthContext);
@@ -352,8 +353,9 @@ export const TeacherDashboard = () => {
                       </td>
 
                       {/* Hour 1 .. 4 Columns */}
-                      {st.hours.map((h) => (
-                        <td key={h.hour_number} className="py-4 px-6 text-center">
+                      {st.hours.map((h) => {
+                        const nextBookedHour = st.next_booking_hours?.[h.hour_number];
+                        return <td key={h.hour_number} className="py-4 px-6 text-center">
                           {h.completed ? h.photo_count > 0 ? (
                             <button
                               onClick={() => {
@@ -380,12 +382,20 @@ export const TeacherDashboard = () => {
                               <span className="text-[10px] text-slate-400">No proof yet</span>
                             </div>
                           ) : (
-                            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 font-bold text-xs" title="Slot not scheduled">
-                              ❌
-                            </span>
+                            nextBookedHour ? (
+                              <div className="inline-flex max-w-32 flex-col items-center gap-1 rounded-xl border border-blue-200 bg-blue-50 p-2" title={`Next booked day: ${st.next_booking_date}`}>
+                                <span className="text-[10px] font-bold text-blue-800">Booked · {formatBookingDate(st.next_booking_date)}</span>
+                                <span className="text-[10px] leading-tight text-blue-700">{nextBookedHour.planned_time_slot}</span>
+                                <span className="max-w-28 truncate text-[10px] text-slate-500">{nextBookedHour.subject}</span>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 font-bold text-xs" title="Slot not scheduled">
+                                ❌
+                              </span>
+                            )
                           )}
-                        </td>
-                      ))}
+                        </td>;
+                      })}
 
                       {/* Overall Status Badge */}
                       <td className="py-4 px-6 text-right">
