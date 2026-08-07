@@ -27,9 +27,24 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid ID or password' });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password_hash);
+    const hasBcryptHash = typeof user.password_hash === 'string' && /^\$2[aby]\$/.test(user.password_hash);
+    // Earlier Supabase records were stored before password hashing was added.
+    // Accept a matching legacy value once, then upgrade it immediately so every
+    // subsequent sign-in uses bcrypt.
+    const isMatch = hasBcryptHash
+      ? await bcrypt.compare(password, user.password_hash)
+      : password === user.password_hash;
     if (!isMatch) {
       return res.status(401).json({ error: 'Invalid ID or password' });
+    }
+
+    if (!hasBcryptHash) {
+      const password_hash = await bcrypt.hash(password, 10);
+      const { error: upgradeError } = await supabase
+        .from('users')
+        .update({ password_hash })
+        .eq('id', user.id);
+      if (upgradeError) throw upgradeError;
     }
 
     const payload = {
@@ -134,6 +149,64 @@ router.post('/teacher-signup', async (req, res) => {
   } catch (err) {
     console.error('Teacher signup error:', err);
     res.status(500).json({ error: 'Server error during signup.' });
+  }
+});
+
+// POST /api/auth/teacher-forgot-password
+// Teacher resets are protected with the administrator-issued invite code.
+router.post('/teacher-forgot-password', async (req, res) => {
+  try {
+    const { teacher_id, password, invite_code } = req.body;
+    const teacherId = teacher_id?.trim().toUpperCase();
+    const validCode = process.env.TEACHER_INVITE_CODE;
+
+    if (!teacherId || !password || !invite_code) {
+      return res.status(400).json({ error: 'Teacher ID, new password, and invite code are required.' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    }
+    if (invite_code !== validCode) {
+      return res.status(403).json({ error: 'Invalid invite code. Please contact the administrator.' });
+    }
+
+    const { data: teacher, error: teacherError } = await supabase
+      .from('users')
+      .select('id, student_id, name, role')
+      .ilike('student_id', teacherId)
+      .eq('role', 'teacher')
+      .maybeSingle();
+    if (teacherError) throw teacherError;
+    if (!teacher) {
+      return res.status(404).json({ error: 'Teacher account not found.' });
+    }
+
+    const password_hash = await bcrypt.hash(password, 10);
+    const { data: updatedTeacher, error: updateError } = await supabase
+      .from('users')
+      .update({ password_hash })
+      .eq('id', teacher.id)
+      .select('password_hash')
+      .single();
+    if (updateError) throw updateError;
+
+    const wasSaved = await bcrypt.compare(password, updatedTeacher.password_hash);
+    if (!wasSaved) {
+      throw new Error('The new password could not be verified after saving.');
+    }
+
+    const payload = {
+      id: teacher.id,
+      student_id: teacher.student_id,
+      name: teacher.name,
+      role: teacher.role
+    };
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+
+    res.json({ message: 'Password reset successfully.', token, user: payload });
+  } catch (err) {
+    console.error('Teacher password reset error:', err);
+    res.status(500).json({ error: err.message || 'Unable to reset password. Please try again.' });
   }
 });
 

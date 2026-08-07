@@ -6,7 +6,7 @@ import ImageModal from '../components/ImageModal';
 import { 
   Users, CheckCircle2, Clock, XCircle, Search, 
   Calendar, RefreshCw, BookOpen, Camera,
-  UserPlus, Trash2, Eye, EyeOff, AlertCircle, Pencil, Save, X
+  UserPlus, Trash2, Eye, EyeOff, AlertCircle, Pencil, Save, X, ThumbsUp, MessageSquare
 } from 'lucide-react';
 
 const TAB_STORAGE_KEY = 'dhruv_teacher_dashboard_tab';
@@ -43,6 +43,9 @@ export const TeacherDashboard = () => {
   const [editSlotStart, setEditSlotStart] = useState('');
   const [editSlotEnd, setEditSlotEnd] = useState('');
   const [savingSlot, setSavingSlot] = useState(false);
+  const [reviewDrafts, setReviewDrafts] = useState({});
+  const [reviewMessages, setReviewMessages] = useState({});
+  const [savingReviewId, setSavingReviewId] = useState(null);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -157,6 +160,30 @@ export const TeacherDashboard = () => {
       setAdminMsg({ type: 'error', text: err.response?.data?.error || 'Failed to update the slot time.' });
     } finally {
       setSavingSlot(false);
+    }
+  };
+
+  const handleAcknowledge = async (student) => {
+    setSavingReviewId(student.student_id);
+    setReviewMessages((messages) => ({ ...messages, [student.student_id]: null }));
+    try {
+      const comment = reviewDrafts[student.student_id] ?? student.acknowledgement?.comment ?? '';
+      await api.put(`/teacher/students/${encodeURIComponent(student.student_id)}/acknowledgement`, {
+        date: selectedDate,
+        reaction: 'THUMBS_UP',
+        comment
+      });
+      setReviewDrafts((drafts) => ({ ...drafts, [student.student_id]: comment }));
+      setReviewMessages((messages) => ({ ...messages, [student.student_id]: { type: 'success', text: 'Acknowledged successfully.' } }));
+      await fetchDashboard();
+    } catch (err) {
+      const serverMessage = err.response?.data?.error;
+      const statusMessage = err.response?.status
+        ? `The server returned ${err.response.status}. Please restart or deploy the latest backend.`
+        : 'The backend could not be reached. Please confirm it is running.';
+      setReviewMessages((messages) => ({ ...messages, [student.student_id]: { type: 'error', text: serverMessage || statusMessage } }));
+    } finally {
+      setSavingReviewId(null);
     }
   };
 
@@ -346,12 +373,13 @@ export const TeacherDashboard = () => {
                 <th className="py-4 px-6 text-center">Slot 3</th>
                 <th className="py-4 px-6 text-center">Slot 4</th>
                 <th className="py-4 px-6 text-right">Overall Status</th>
+                <th className="py-4 px-6">Teacher Review</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 text-xs sm:text-sm">
               {filteredStudents.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="py-12 text-center text-slate-400">
+                  <td colSpan="8" className="py-12 text-center text-slate-400">
                     <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
                     <p>No student records matching your filter criteria.</p>
                   </td>
@@ -430,6 +458,31 @@ export const TeacherDashboard = () => {
                       {/* Overall Status Badge */}
                       <td className="py-4 px-6 text-right">
                         <StatusBadge status={st.overallStatus} type="study" />
+                      </td>
+
+                      <td className="py-4 px-6 min-w-64">
+                        <div className="space-y-2">
+                          {st.acknowledgement ? (
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700"><ThumbsUp className="w-4 h-4 fill-emerald-600" />Acknowledged</div>
+                          ) : (
+                            <div className="text-xs text-slate-500">Review images and acknowledge.</div>
+                          )}
+                          <div className="flex gap-2">
+                            <input
+                              aria-label={`Comment for ${st.name}`}
+                              value={reviewDrafts[st.student_id] ?? st.acknowledgement?.comment ?? ''}
+                              onChange={(event) => setReviewDrafts((drafts) => ({ ...drafts, [st.student_id]: event.target.value }))}
+                              placeholder="Optional comment"
+                              maxLength={500}
+                              className="min-w-0 flex-1 rounded-lg border border-slate-200 px-2.5 py-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-purple-400 focus:outline-none"
+                            />
+                            <button type="button" onClick={() => handleAcknowledge(st)} disabled={savingReviewId === st.student_id} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50" title="Confirm that you reviewed this student's work and images">
+                              <ThumbsUp className="w-3.5 h-3.5" />{savingReviewId === st.student_id ? 'Saving' : 'Acknowledge'}
+                            </button>
+                          </div>
+                          {reviewMessages[st.student_id] && <div className={`text-[11px] font-medium ${reviewMessages[st.student_id].type === 'success' ? 'text-emerald-700' : 'text-rose-700'}`}>{reviewMessages[st.student_id].text}</div>}
+                          {st.acknowledgement?.acknowledged_at && <div className="flex items-center gap-1 text-[10px] text-slate-500"><MessageSquare className="w-3 h-3" />Checked {new Date(st.acknowledgement.acknowledged_at).toLocaleString()}</div>}
+                        </div>
                       </td>
 
                     </tr>

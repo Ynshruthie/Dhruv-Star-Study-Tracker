@@ -36,6 +36,81 @@ body {
   transform: translateY(-1px);
 }
 
+/* Teacher review state: a restrained acknowledgement celebration that also
+   makes the background refresh feel like a deliberate live update. */
+.teacher-review-card {
+  isolation: isolate;
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+}
+
+.teacher-review-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -16px rgba(15, 118, 110, 0.35);
+}
+
+.teacher-review-card--acknowledged {
+  background: linear-gradient(120deg, #0f172a, #064e3b);
+  border-color: rgba(52, 211, 153, 0.35);
+  animation: teacher-review-arrive 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.teacher-review-card--pending {
+  background: linear-gradient(120deg, #0f172a, #3f2d0d);
+  border-color: rgba(251, 191, 36, 0.35);
+}
+
+.teacher-review-card--acknowledged::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 30%, rgba(255, 255, 255, 0.72) 48%, transparent 65%);
+  transform: translateX(-115%);
+  animation: teacher-review-shine 900ms 180ms ease-out both;
+}
+
+.teacher-review-card--acknowledged .teacher-review-icon {
+  animation: teacher-review-icon-pop 620ms 110ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.teacher-review-card--pending .teacher-review-icon {
+  animation: teacher-review-wait 2.4s ease-in-out infinite;
+}
+
+@keyframes teacher-review-arrive {
+  from { opacity: 0.45; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes teacher-review-shine {
+  to { transform: translateX(115%); }
+}
+
+@keyframes teacher-review-icon-pop {
+  0% { transform: scale(0.55) rotate(-12deg); }
+  70% { transform: scale(1.14) rotate(5deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+@keyframes teacher-review-wait {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.16); }
+  50% { transform: scale(1.04); box-shadow: 0 0 0 8px rgba(217, 119, 6, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teacher-review-card,
+  .teacher-review-card:hover,
+  .teacher-review-card--acknowledged,
+  .teacher-review-card--acknowledged::after,
+  .teacher-review-card--acknowledged .teacher-review-icon,
+  .teacher-review-card--pending .teacher-review-icon {
+    animation: none;
+    transform: none;
+    transition: none;
+  }
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

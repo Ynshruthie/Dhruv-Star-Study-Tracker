@@ -302,6 +302,14 @@ router.get('/today', authenticateToken, async (req, res) => {
 
     if (error) throw error;
 
+    const { data: acknowledgement, error: acknowledgementError } = await supabase
+      .from('teacher_acknowledgements')
+      .select('teacher_id, reaction, comment, acknowledged_at')
+      .eq('student_id', student_id)
+      .eq('date', date)
+      .maybeSingle();
+    if (acknowledgementError) throw acknowledgementError;
+
     const formattedHours = (hours || []).map((hour) => formatHourResponse(hour, clock.totalMinutes));
 
     res.json({
@@ -309,7 +317,8 @@ router.get('/today', authenticateToken, async (req, res) => {
       current_time: clock.hhmm,
       current_time_label: formatHHMM(clock.hhmm),
       scheduledCount: formattedHours.length,
-      hours: formattedHours
+      hours: formattedHours,
+      teacher_acknowledgement: acknowledgement || null
     });
   } catch (err) {
     console.error('Error fetching today study tracker:', err);
@@ -357,6 +366,95 @@ router.get('/week', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error fetching week data:', err);
     res.status(500).json({ error: 'Failed to fetch week data.' });
+  }
+});
+
+// POST /api/study/schedule/day
+// Save the four slots for one selected Monday–Saturday date. This keeps each
+// calendar day independent instead of duplicating one plan across a week.
+router.post('/schedule/day', authenticateToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'student') {
+      return res.status(403).json({ error: 'Only students can create daily study plans.' });
+    }
+
+    // All six daily plans are prepared on Sunday. Enforcing this on the
+    // server prevents clients from bypassing the disabled booking UI.
+    if (new Date().getDay() !== 0) {
+      return res.status(403).json({ error: 'Daily slot booking is available on Sundays only.' });
+    }
+
+    const student_id = req.user.student_id;
+    const date = req.body.date;
+    const scheduledDate = parseDate(date);
+    if (!scheduledDate || scheduledDate.getDay() === 0) {
+      return res.status(400).json({ error: 'Choose a valid Monday–Saturday date.' });
+    }
+    const expectedWeekStart = new Date();
+    expectedWeekStart.setDate(expectedWeekStart.getDate() + 1);
+    const allowedDates = getWeekDates(expectedWeekStart);
+    if (!allowedDates.includes(date)) {
+      return res.status(400).json({ error: `Book slots for the upcoming week starting ${formatDate(expectedWeekStart)}.` });
+    }
+
+    const slots = Array.isArray(req.body.slots) ? req.body.slots : [];
+    if (slots.length !== 4) {
+      return res.status(400).json({ error: 'Exactly 4 study slots are required.' });
+    }
+
+    const normalizedSlots = slots.map((slot, index) => {
+      const subject = (slot.subject || '').trim();
+      const plannedStart = slot.planned_start;
+      const plannedEnd = slot.planned_end;
+      const managerType = String(slot.manager_type || 'SELF').toUpperCase();
+      const plannedStartMinutes = hhmmToMinutes(plannedStart);
+      const plannedEndMinutes = hhmmToMinutes(plannedEnd);
+
+      if (!subject) throw new Error(`Subject for Slot ${index + 1} is required.`);
+      if (!['SELF', 'PARENT'].includes(managerType)) throw new Error(`Choose Self or Parent for Slot ${index + 1}.`);
+      if (plannedStartMinutes == null || plannedEndMinutes == null || plannedEndMinutes <= plannedStartMinutes) {
+        throw new Error(`Slot ${index + 1} needs a valid end time later than its start time.`);
+      }
+      return { hour_number: index + 1, subject, plannedStart, plannedEnd, managerType };
+    });
+
+    const { data: existingRows, error: existingError } = await supabase
+      .from('study_hours').select('*').eq('student_id', student_id).eq('date', date);
+    if (existingError) throw existingError;
+    const existingByHour = new Map((existingRows || []).map((row) => [row.hour_number, row]));
+    const bookingConfirmedAt = new Date().toISOString();
+
+    const rows = normalizedSlots.map((slot) => {
+      const existing = existingByHour.get(slot.hour_number);
+      const payload = existing ? parseStoredHourPayload(existing.image_url) : null;
+      const unchanged = existing && existing.subject === slot.subject &&
+        (payload?.managerType || 'SELF') === slot.managerType &&
+        payload?.plannedStart === slot.plannedStart && payload?.plannedEnd === slot.plannedEnd;
+      if (payload && (payload.attendanceStatus === 'PRESENT' || payload.images.length > 0) && !unchanged) {
+        throw new Error(`Slot ${slot.hour_number} already has activity and cannot be changed.`);
+      }
+      if (unchanged) return { ...existing, image_url: serializeHourPayload({ ...payload, bookingConfirmedAt }) };
+      return {
+        student_id, date, hour_number: slot.hour_number, subject: slot.subject,
+        time_slot: buildTimeRangeLabel(slot.plannedStart, slot.plannedEnd),
+        image_url: serializeHourPayload({
+          images: payload?.images || [], managerType: slot.managerType,
+          attendanceStatus: slot.managerType === 'PARENT' ? 'PARENT' : 'PENDING',
+          attendanceMarkedAt: null, bookingConfirmedAt,
+          plannedStart: slot.plannedStart, plannedEnd: slot.plannedEnd,
+          actualStart: null, actualEnd: null
+        })
+      };
+    });
+
+    const { error: upsertError } = await supabase
+      .from('study_hours').upsert(rows, { onConflict: 'student_id,date,hour_number' });
+    if (upsertError) throw upsertError;
+
+    res.json({ message: 'Daily study plan saved successfully.', date, hours: rows.map((row) => formatHourResponse(row, -1)) });
+  } catch (err) {
+    console.error('Error saving daily study schedule:', err);
+    res.status(400).json({ error: err.message || 'Failed to save daily study plan.' });
   }
 });
 

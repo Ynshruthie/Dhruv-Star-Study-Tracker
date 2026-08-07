@@ -131,6 +131,13 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
       .select('*')
       .eq('date', date);
 
+    const { data: acknowledgements, error: acknowledgementsError } = await supabase
+      .from('teacher_acknowledgements')
+      .select('student_id, teacher_id, reaction, comment, acknowledged_at')
+      .eq('date', date);
+    if (acknowledgementsError) throw acknowledgementsError;
+    const acknowledgementMap = new Map((acknowledgements || []).map((item) => [item.student_id, item]));
+
     // Also include each student's next booked day. A teacher normally views
     // today's dashboard, while students book future Monday–Saturday slots.
     const { data: futureStudyHours, error: futureStudyHoursError } = await supabase
@@ -186,6 +193,7 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
     const studentReport = (students || []).map(st => {
       const studentHoursObj = hoursMap.get(st.student_id) || {};
       const nextBooking = nextBookingMap.get(st.student_id);
+      const acknowledgement = acknowledgementMap.get(st.student_id) || null;
 
       const hours = [1, 2, 3, 4].map(hNum => {
         const hourData = studentHoursObj[hNum];
@@ -278,6 +286,7 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
         student_id: st.student_id,
         name: st.name,
         mentor: st.mentor,
+        acknowledgement,
         next_booking_date: nextBooking?.date || null,
         next_booking_hours: nextBooking ? nextBooking.hours : {},
         attendance: {
@@ -305,6 +314,30 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
   } catch (err) {
     console.error('Teacher dashboard error:', err);
     res.status(500).json({ error: 'Failed to fetch teacher dashboard data' });
+  }
+});
+
+// PUT /api/teacher/students/:studentId/acknowledgement — acknowledge a daily review
+router.put('/students/:studentId/acknowledgement', authenticateToken, requireRole('teacher'), async (req, res) => {
+  try {
+    const student_id = decodeURIComponent(req.params.studentId || '').trim();
+    const date = getTodayDateString(req.body.date);
+    const reaction = req.body.reaction === 'THUMBS_UP' ? 'THUMBS_UP' : 'THUMBS_UP';
+    const comment = typeof req.body.comment === 'string' ? req.body.comment.trim().slice(0, 500) : '';
+    if (!student_id || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'A student and valid review date are required.' });
+    }
+
+    const { data, error } = await supabase
+      .from('teacher_acknowledgements')
+      .upsert({ student_id, date, teacher_id: req.user.student_id, reaction, comment: comment || null, acknowledged_at: new Date().toISOString() }, { onConflict: 'student_id,date' })
+      .select('student_id, teacher_id, reaction, comment, acknowledged_at')
+      .single();
+    if (error) throw error;
+    res.json({ message: 'Work acknowledged.', acknowledgement: data });
+  } catch (err) {
+    console.error('Teacher acknowledgement error:', err);
+    res.status(500).json({ error: 'Failed to acknowledge this work. Ensure the latest database schema is installed.' });
   }
 });
 
@@ -534,6 +567,7 @@ router.delete('/students/:studentId', authenticateToken, requireRole('teacher'),
     await supabase.from('study_hours').delete().eq('student_id', studentId);
     await supabase.from('study_submissions').delete().eq('student_id', studentId);
     await supabase.from('attendance').delete().eq('student_id', studentId);
+    await supabase.from('teacher_acknowledgements').delete().eq('student_id', studentId);
     await supabase.from('users').delete().eq('student_id', studentId).eq('role', 'student');
 
     res.json({ message: `Student "${existing.name}" (${studentId}) has been removed.` });

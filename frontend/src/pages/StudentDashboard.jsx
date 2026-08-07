@@ -2,7 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { AuthContext } from '../context/AuthContextDefinition';
 import api from '../utils/api';
 import ImageModal from '../components/ImageModal';
-import { AlertCircle, BookOpen, CalendarClock, CheckCircle2, Clock3, ImagePlus, Play, Save, Timer, Upload } from 'lucide-react';
+import { AlertCircle, BookOpen, CalendarClock, CheckCircle2, Clock3, ImagePlus, Play, Save, ThumbsUp, Timer, Upload } from 'lucide-react';
 
 const SUBJECT_OPTIONS = ['Mathematics', 'Science', 'Physics', 'Chemistry', 'Biology', 'Social', 'Kannada', 'Hindi', 'English', 'Self Study', 'Notes Completion', 'Project', 'Exam Preparation'];
 const DEFAULT_SLOTS = [
@@ -36,6 +36,7 @@ const formatCountdown = (totalSeconds) => {
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
+const REVIEW_REFRESH_INTERVAL_MS = 3_000;
 const buildFormSlots = () => DEFAULT_SLOTS.map((slot) => ({ ...slot }));
 const buildEmptyHours = () => [1, 2, 3, 4].map((hourNumber) => ({
   hour_number: hourNumber, subject: '', scheduled_time_slot: '', attendance_status: 'UNSCHEDULED', manager_type: 'SELF',
@@ -51,10 +52,12 @@ const statusLabels = { PRESENT: 'Present', ABSENT: 'Absent', PENDING: 'Waiting',
 
 export const StudentDashboard = () => {
   const { user, simulatedTime } = useContext(AuthContext);
-  const [weekStart] = useState(getUpcomingWeekStart);
+  const [weekStart, setWeekStart] = useState(getUpcomingWeekStart);
+  const [selectedBookingDate, setSelectedBookingDate] = useState(getUpcomingWeekStart);
   const [date, setDate] = useState('');
   const [currentTime, setCurrentTime] = useState('');
   const [hours, setHours] = useState(buildEmptyHours);
+  const [teacherAcknowledgement, setTeacherAcknowledgement] = useState(null);
   const [formSlots, setFormSlots] = useState(buildFormSlots);
   const [loading, setLoading] = useState(true);
   const [savingSchedule, setSavingSchedule] = useState(false);
@@ -66,9 +69,10 @@ export const StudentDashboard = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [now, setNow] = useState(Date.now());
   const bookingOpen = new Date().getDay() === 0;
+  const bookingAllowedForWeek = bookingOpen && weekStart === getUpcomingWeekStart();
 
-  const fetchToday = useCallback(async () => {
-    setLoading(true);
+  const fetchToday = useCallback(async ({ showLoader = false } = {}) => {
+    if (showLoader) setLoading(true);
     try {
       const { data } = await api.get('/study/today');
       const nextHours = buildEmptyHours();
@@ -76,27 +80,26 @@ export const StudentDashboard = () => {
       setHours(nextHours);
       setDate(data.date);
       setCurrentTime(data.current_time_label);
+      setTeacherAcknowledgement(data.teacher_acknowledgement || null);
     } catch (err) {
       console.error('Failed to load student dashboard:', err);
       setError('Failed to load today’s student slots.');
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   }, []);
 
   const fetchWeeklyPlan = useCallback(async () => {
     try {
       const { data } = await api.get(`/study/week?week_start=${weekStart}`);
-      const firstScheduledDay = data.dates.find((day) => {
-        const daySlots = data.by_date[day] || [];
-        return daySlots.length === 4 && daySlots.every((slot) => slot.booking_confirmed_at);
-      });
-      if (!firstScheduledDay) {
+      const daySlots = data.by_date[selectedBookingDate] || [];
+      if (daySlots.length !== 4 || !daySlots.every((slot) => slot.booking_confirmed_at)) {
         setWeeklyPlanSaved(false);
+        setFormSlots(buildFormSlots());
         return;
       }
       const nextFormSlots = buildFormSlots();
-      data.by_date[firstScheduledDay].forEach((hour) => {
+      daySlots.forEach((hour) => {
         nextFormSlots[hour.hour_number - 1] = {
           subject: hour.subject, planned_start: hour.planned_start, planned_end: hour.planned_end, manager_type: hour.manager_type
         };
@@ -107,15 +110,16 @@ export const StudentDashboard = () => {
       console.error('Failed to load weekly plan:', err);
       setError('Failed to load the upcoming weekly plan.');
     }
-  }, [weekStart]);
+  }, [selectedBookingDate, weekStart]);
 
   useEffect(() => {
-    fetchToday();
-    if (bookingOpen) fetchWeeklyPlan();
-  }, [bookingOpen, fetchToday, fetchWeeklyPlan, simulatedTime, weekStart]);
+    fetchToday({ showLoader: true });
+    fetchWeeklyPlan();
+  }, [fetchToday, fetchWeeklyPlan, simulatedTime, weekStart]);
 
   useEffect(() => {
-    const refreshTimer = window.setInterval(fetchToday, 60_000);
+    // Keep the review card in sync when a teacher acknowledges work in their dashboard.
+    const refreshTimer = window.setInterval(fetchToday, REVIEW_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(refreshTimer);
   }, [fetchToday, simulatedTime]);
 
@@ -151,7 +155,7 @@ export const StudentDashboard = () => {
       month: day.toLocaleDateString(undefined, { month: 'short' })
     };
   }), [weekStart]);
-  const slotsLocked = !bookingOpen;
+  const slotsLocked = !bookingAllowedForWeek;
 
   const updateFormSlot = (index, field, value) => {
     setFormSlots((previous) => previous.map((slot, slotIndex) => slotIndex === index ? { ...slot, [field]: value } : slot));
@@ -165,10 +169,26 @@ export const StudentDashboard = () => {
     setMessage('');
     setError('');
     try {
-      await api.post('/study/schedule', { week_start: weekStart, slots: formSlots });
+      await api.post('/study/schedule/day', { date: selectedBookingDate, slots: formSlots });
       setWeeklyPlanSaved(true);
-      setMessage(`Your plan for ${formatWeekRange(weekStart)} has been saved.`);
-      await fetchWeeklyPlan();
+      setMessage(`Your plan for ${selectedBookingDate} has been saved.`);
+      const { data: weekData } = await api.get(`/study/week?week_start=${weekStart}`);
+      const weekIsComplete = weekData.dates.every((day) => {
+        const daySlots = weekData.by_date[day] || [];
+        return daySlots.length === 4 && daySlots.every((slot) => slot.booking_confirmed_at);
+      });
+      if (weekIsComplete) {
+        const nextWeek = new Date(`${weekStart}T00:00:00`);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        const nextWeekStart = formatDate(nextWeek);
+        setWeekStart(nextWeekStart);
+        setSelectedBookingDate(nextWeekStart);
+        setWeeklyPlanSaved(false);
+        setFormSlots(buildFormSlots());
+        setMessage(`All six days are booked. The next week (${formatWeekRange(nextWeekStart)}) is shown and opens for booking next Sunday.`);
+      } else {
+        await fetchWeeklyPlan();
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to save the weekly plan.');
     } finally {
@@ -218,11 +238,11 @@ export const StudentDashboard = () => {
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full"><BookOpen className="w-3.5 h-3.5" /><span>Dhruv Star Academy • Student Dashboard</span></div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Students Lead the Day for <span className="text-blue-600">{user?.name}</span></h1>
-          <p className="text-sm text-slate-500">Book four daily slots for the coming Monday–Saturday week. Weekly booking opens on Sunday only.</p>
+          <p className="text-sm text-slate-500">On Sunday, choose a Monday–Saturday date, then set its four study slots. Each day is saved separately.</p>
         </div>
         <div className="text-right text-sm text-slate-500">
           <div>Upcoming Week: <span className="font-semibold text-slate-900">{formatWeekRange(weekStart)}</span></div>
-          <div>Booking: <span className={`font-semibold ${bookingOpen ? 'text-emerald-700' : 'text-amber-700'}`}>{bookingOpen ? 'Open today' : 'Opens Sunday'}</span></div>
+          <div>Booking: <span className={`font-semibold ${bookingAllowedForWeek ? 'text-emerald-700' : 'text-amber-700'}`}>{bookingAllowedForWeek ? 'Open today' : 'Opens next Sunday'}</span></div>
           <div>Today: <span className="font-mono font-semibold text-slate-900">{date}</span> · <span className="font-mono font-semibold text-blue-700">{currentTime}</span></div>
           <div>Today&apos;s Slots: <span className="font-mono font-semibold text-slate-900">{scheduledCount} / 4</span></div>
         </div>
@@ -232,25 +252,25 @@ export const StudentDashboard = () => {
 
       <form onSubmit={handleSaveSchedule} className="clean-card p-6 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="text-lg font-bold text-slate-900">Plan Your Week&apos;s 4 Daily Slots</h2><p className="text-sm text-slate-500">On Sunday, choose four slots that will be scheduled only for the next six days: Monday through Saturday.</p></div>
+          <div><h2 className="text-lg font-bold text-slate-900">Plan 4 Slots for a Day</h2><p className="text-sm text-slate-500">On Sunday, click a day below to open and manage that date&apos;s independent four-slot plan.</p></div>
           <div className="flex gap-3 text-xs font-semibold"><span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Self: {selfCount}</span><span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Parent: {4 - selfCount}</span></div>
         </div>
-        <div className={`rounded-xl border p-4 ${bookingOpen ? 'border-blue-200 bg-blue-50/60' : 'border-slate-200 bg-slate-50'}`}>
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3"><div className="flex items-center gap-2 text-sm font-bold text-slate-900"><CalendarClock className="w-4 h-4 text-blue-600" />Next 6 booking days</div><span className={`text-xs font-semibold ${bookingOpen ? 'text-emerald-700' : 'text-slate-500'}`}>{bookingOpen ? 'Sunday booking is open' : 'Calendar is locked until Sunday'}</span></div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">{bookingDates.map((bookingDate) => <div key={bookingDate.key} className={`rounded-lg border px-2 py-2.5 text-center ${bookingOpen ? 'border-blue-200 bg-white' : 'border-slate-200 bg-white/70 text-slate-500'}`}><div className="text-[11px] font-bold uppercase tracking-wide">{bookingDate.weekday}</div><div className="text-lg font-extrabold leading-tight text-slate-900">{bookingDate.day}</div><div className="text-[11px]">{bookingDate.month}</div></div>)}</div>
-          <p className="mt-3 text-xs text-slate-600">Sunday is used only to book this upcoming Monday–Saturday calendar. It is not included as a study day.</p>
+        <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3"><div className="flex items-center gap-2 text-sm font-bold text-slate-900"><CalendarClock className="w-4 h-4 text-blue-600" />Select a study day</div><span className={`text-xs font-semibold ${bookingAllowedForWeek ? 'text-emerald-700' : 'text-amber-700'}`}>{bookingAllowedForWeek ? 'Sunday booking is open' : 'Booking opens next Sunday'}</span></div>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">{bookingDates.map((bookingDate) => <button type="button" key={bookingDate.key} onClick={() => { setSelectedBookingDate(bookingDate.key); setWeeklyPlanSaved(false); setFormSlots(buildFormSlots()); setMessage(''); setError(''); }} aria-pressed={selectedBookingDate === bookingDate.key} className={`rounded-lg border px-2 py-2.5 text-center transition ${selectedBookingDate === bookingDate.key ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-blue-200 bg-white text-slate-600 hover:border-blue-400 hover:bg-blue-50'}`}><div className="text-[11px] font-bold uppercase tracking-wide">{bookingDate.weekday}</div><div className="text-lg font-extrabold leading-tight">{bookingDate.day}</div><div className="text-[11px]">{bookingDate.month}</div></button>)}</div>
+          <p className="mt-3 text-xs text-slate-600">The active day is highlighted. Its saved slots load automatically when you select it.</p>
         </div>
-        {!bookingOpen && <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><CalendarClock className="w-5 h-5 shrink-0" /><span>Weekly booking is closed. Return on Sunday to plan the next Monday–Saturday week.</span></div>}
-        {bookingOpen && weeklyPlanSaved && <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><CheckCircle2 className="w-5 h-5 shrink-0" /><span>Your four daily slots are saved for the upcoming week.</span></div>}
+        {!bookingAllowedForWeek && <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><CalendarClock className="w-5 h-5 shrink-0" /><span>You can view each day&apos;s slots now, but booking and changes open on the Sunday before this week.</span></div>}
+        {weeklyPlanSaved && <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><CheckCircle2 className="w-5 h-5 shrink-0" /><span>Four slots are saved for {selectedBookingDate}.</span></div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {formSlots.map((slot, index) => <div key={index} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
-            <div className="flex items-center justify-between"><div><div className="text-sm font-bold text-slate-900">Slot {index + 1}</div><div className="text-xs text-slate-500">{slotsLocked ? 'Weekly booking locked' : 'Choose subject, time and owner'}</div></div><span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200">{slot.manager_type === 'SELF' ? 'Student Handles' : 'Parent Handles'}</span></div>
+            <div className="flex items-center justify-between"><div><div className="text-sm font-bold text-slate-900">Slot {index + 1}</div><div className="text-xs text-slate-500">{slotsLocked ? 'Booking opens Sunday' : 'Choose subject, time and owner'}</div></div><span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200">{slot.manager_type === 'SELF' ? 'Student Handles' : 'Parent Handles'}</span></div>
             <select value={slot.subject} onChange={(event) => updateFormSlot(index, 'subject', event.target.value)} disabled={slotsLocked} className="w-full corporate-select text-sm disabled:opacity-60">{SUBJECT_OPTIONS.map((subject) => <option key={subject} value={subject}>{subject}</option>)}</select>
             <div className="grid grid-cols-2 gap-4"><input aria-label={`Slot ${index + 1} start time`} type="time" value={slot.planned_start} onChange={(event) => updateFormSlot(index, 'planned_start', event.target.value)} disabled={slotsLocked} className="w-full corporate-input text-sm disabled:opacity-60" /><input aria-label={`Slot ${index + 1} end time`} type="time" value={slot.planned_end} onChange={(event) => updateFormSlot(index, 'planned_end', event.target.value)} disabled={slotsLocked} className="w-full corporate-input text-sm disabled:opacity-60" /></div>
             <div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => updateFormSlot(index, 'manager_type', 'SELF')} disabled={slotsLocked} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${slot.manager_type === 'SELF' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}>Self</button><button type="button" onClick={() => updateFormSlot(index, 'manager_type', 'PARENT')} disabled={slotsLocked} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${slot.manager_type === 'PARENT' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-600'}`}>Parent</button></div>
           </div>)}
         </div>
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4"><p className="text-sm text-slate-500">{slotsLocked ? 'Weekly slots can only be changed on Sunday before activity starts.' : 'Save once to apply all four slots to Monday through Saturday.'}</p><button type="submit" disabled={savingSchedule || slotsLocked} className="px-6 py-3 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-md transition flex items-center gap-2 disabled:opacity-50"><Save className="w-4 h-4" /><span>{savingSchedule ? 'Saving Weekly Plan...' : slotsLocked ? 'Booking Opens Sunday' : weeklyPlanSaved ? 'Update Weekly Plan' : 'Save Weekly Plan'}</span></button></div>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4"><p className="text-sm text-slate-500">{bookingAllowedForWeek ? `Save the four slots for ${selectedBookingDate}. Click another day to continue planning it.` : 'Booking is locked until the Sunday before this week.'}</p><button type="submit" disabled={savingSchedule || slotsLocked} className="px-6 py-3 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-md transition flex items-center gap-2 disabled:opacity-50"><Save className="w-4 h-4" /><span>{savingSchedule ? 'Saving Day...' : slotsLocked ? 'Booking Opens Sunday' : weeklyPlanSaved ? 'Update Day Plan' : 'Save Day Plan'}</span></button></div>
       </form>
 
       <div className="clean-card p-6 space-y-2"><div className="flex items-center gap-2 text-slate-900"><CalendarClock className="w-5 h-5 text-blue-600" /><h2 className="text-lg font-bold">Today&apos;s Slot Tracking</h2></div><p className="text-sm text-slate-500">Self slots can start during the first 15 minutes, run for one hour from the actual start time, then allow proof uploads for 15 minutes. Parent slots stay unchanged.</p></div>
@@ -275,6 +295,21 @@ export const StudentDashboard = () => {
           </div>;
         })}
       </div>
+      <section className={`teacher-review-card clean-card relative overflow-hidden p-5 border ${teacherAcknowledgement ? 'teacher-review-card--acknowledged' : 'teacher-review-card--pending'}`} aria-label="Teacher review">
+        <div className="relative z-10 flex items-start gap-3">
+          <div className={`teacher-review-icon mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${teacherAcknowledgement ? 'bg-emerald-400 text-emerald-950' : 'bg-amber-300 text-amber-950'}`}>
+            {teacherAcknowledgement ? <ThumbsUp className="h-5 w-5 fill-current" /> : <Clock3 className="h-5 w-5" />}
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-sm font-bold text-white">Teacher Review</h2>
+            {teacherAcknowledgement ? <>
+              <p className="text-sm text-emerald-100">Your teacher has corrected and acknowledged today&apos;s uploaded work.</p>
+              {teacherAcknowledgement.comment && <p className="text-sm text-emerald-200">Teacher&apos;s comment: {teacherAcknowledgement.comment}</p>}
+              <p className="text-[11px] text-emerald-300">Reviewed by {teacherAcknowledgement.teacher_id} · {new Date(teacherAcknowledgement.acknowledged_at).toLocaleString()}</p>
+            </> : <p className="text-sm text-amber-100">No teacher review yet. Uploaded work will show as corrected here after your teacher acknowledges it.</p>}
+          </div>
+        </div>
+      </section>
       <ImageModal isOpen={!!selectedImage} onClose={() => setSelectedImage(null)} hourData={selectedImage} studentName={user?.name} />
     </div>
   );

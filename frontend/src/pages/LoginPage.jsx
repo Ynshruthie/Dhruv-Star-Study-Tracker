@@ -1,12 +1,12 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContextDefinition';
-import { ShieldCheck, GraduationCap, ArrowRight, AlertCircle, UserPlus, LogIn, CheckCircle } from 'lucide-react';
+import { ShieldCheck, GraduationCap, ArrowRight, AlertCircle, UserPlus, LogIn, CheckCircle, KeyRound } from 'lucide-react';
 import api from '../utils/api';
 
 export const LoginPage = () => {
   const { login } = useContext(AuthContext);
   const [activeTab, setActiveTab] = useState('student');
-  const [mode, setMode] = useState('login'); // 'login' or 'signup' (only for teacher tab)
+  const [mode, setMode] = useState('login'); // 'login', 'signup', or 'forgot' (teacher-only)
   const [studentId, setStudentId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -19,12 +19,22 @@ export const LoginPage = () => {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
   const [signupInviteCode, setSignupInviteCode] = useState('');
+  const [resetTeacherId, setResetTeacherId] = useState('');
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [resetInviteCode, setResetInviteCode] = useState('');
 
   const switchTab = (tab) => {
     setActiveTab(tab);
     setMode('login');
     setStudentId('');
     setPassword('');
+    setError('');
+    setSuccess('');
+  };
+
+  const switchTeacherMode = (nextMode) => {
+    setMode(nextMode);
     setError('');
     setSuccess('');
   };
@@ -68,6 +78,39 @@ export const LoginPage = () => {
       window.location.reload();
     } catch (err) {
       setError(err.response?.data?.error || 'Sign up failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (resetPassword !== resetConfirmPassword) {
+      return setError('Passwords do not match.');
+    }
+    if (resetPassword.length < 6) {
+      return setError('Password must be at least 6 characters.');
+    }
+
+    setLoading(true);
+    try {
+      const { data } = await api.post('/auth/teacher-forgot-password', {
+        teacher_id: resetTeacherId,
+        password: resetPassword,
+        invite_code: resetInviteCode
+      });
+      localStorage.setItem('dhruv_token', data.token);
+      localStorage.setItem('dhruv_user', JSON.stringify(data.user));
+      window.location.reload();
+    } catch (err) {
+      const serverMessage = err.response?.data?.error;
+      const statusMessage = err.response?.status
+        ? `Password reset is unavailable (server returned ${err.response.status}). Restart the backend and try again.`
+        : 'The backend could not be reached. Please confirm it is running.';
+      setError(serverMessage || statusMessage);
     } finally {
       setLoading(false);
     }
@@ -124,10 +167,10 @@ export const LoginPage = () => {
 
           {/* Teacher: Login / Signup sub-toggle */}
           {activeTab === 'teacher' && (
-            <div className="flex gap-1 mb-5 p-1 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="grid grid-cols-3 gap-1 mb-5 p-1 bg-amber-50 border border-amber-200 rounded-lg">
               <button
                 type="button"
-                onClick={() => { setMode('login'); setError(''); setSuccess(''); }}
+                onClick={() => switchTeacherMode('login')}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition cursor-pointer ${
                   mode === 'login' ? 'bg-amber-500 text-white shadow-sm' : 'text-amber-700 hover:bg-amber-100'
                 }`}
@@ -137,13 +180,23 @@ export const LoginPage = () => {
               </button>
               <button
                 type="button"
-                onClick={() => { setMode('signup'); setError(''); setSuccess(''); }}
+                onClick={() => switchTeacherMode('signup')}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition cursor-pointer ${
                   mode === 'signup' ? 'bg-amber-500 text-white shadow-sm' : 'text-amber-700 hover:bg-amber-100'
                 }`}
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 Create Account
+              </button>
+              <button
+                type="button"
+                onClick={() => switchTeacherMode('forgot')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-semibold transition cursor-pointer ${
+                  mode === 'forgot' ? 'bg-amber-500 text-white shadow-sm' : 'text-amber-700 hover:bg-amber-100'
+                }`}
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                Reset Password
               </button>
             </div>
           )}
@@ -293,6 +346,31 @@ export const LoginPage = () => {
                     <span>Create Teacher Account</span>
                   </>
                 )}
+              </button>
+            </form>
+          )}
+
+          {mode === 'forgot' && activeTab === 'teacher' && (
+            <form onSubmit={handleForgotPassword} className="space-y-4">
+              <p className="text-sm text-slate-500">Use your administrator-provided invite code to set a new teacher password.</p>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Teacher ID</label>
+                <input type="text" required value={resetTeacherId} onChange={(e) => setResetTeacherId(e.target.value.toUpperCase())} placeholder="e.g. DSAT01" className="w-full h-11 px-4 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">New Password</label>
+                <input type="password" required value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} placeholder="Min. 6 characters" className="w-full h-11 px-4 bg-white border border-slate-300 rounded-lg text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Confirm New Password</label>
+                <input type="password" required value={resetConfirmPassword} onChange={(e) => setResetConfirmPassword(e.target.value)} placeholder="Re-enter new password" className="w-full h-11 px-4 bg-white border border-slate-300 rounded-lg text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Invite Code</label>
+                <input type="password" required value={resetInviteCode} onChange={(e) => setResetInviteCode(e.target.value)} placeholder="Enter invite code" className="w-full h-11 px-4 bg-white border border-slate-300 rounded-lg text-slate-900 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition" />
+              </div>
+              <button type="submit" disabled={loading} className="w-full h-11 rounded-lg font-semibold text-sm text-white bg-amber-600 hover:bg-amber-700 shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <><KeyRound className="w-4 h-4" /><span>Reset Password</span></>}
               </button>
             </form>
           )}
