@@ -413,7 +413,16 @@ export const TeacherDashboard = () => {
                       {st.hours.map((h) => {
                         const nextBookedHour = st.next_booking_hours?.[h.hour_number];
                         return <td key={h.hour_number} className="py-4 px-6 text-center">
-                          {h.completed ? h.photo_count > 0 ? (
+                          {h.attendance_status === 'ABSENT' ? (
+                            <button
+                              type="button"
+                              onClick={() => openSlotEditor(st, { date: selectedDate, hourNumber: h.hour_number, subject: h.subject, planned_start: h.planned_start, planned_end: h.planned_end })}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100"
+                              title={`${h.subject} was missed — click to adjust this slot's time`}
+                            >
+                              <XCircle className="w-5 h-5" />
+                            </button>
+                          ) : h.completed ? h.photo_count > 0 ? (
                             <button
                               onClick={() => {
                                 setActiveModalHour(h);
@@ -448,7 +457,7 @@ export const TeacherDashboard = () => {
                               </button>
                             ) : (
                               <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-500 font-bold text-xs" title="Slot not scheduled">
-                                ❌
+                                <Calendar className="w-4 h-4" />
                               </span>
                             )
                           )}
