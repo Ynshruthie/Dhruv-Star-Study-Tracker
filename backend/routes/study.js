@@ -745,6 +745,17 @@ router.post('/slots/:hourNumber/upload', authenticateToken, upload.array('images
           error: `Photo upload is available for 15 minutes after the study session ends, until ${formatHHMM(minutesToHHMM(derived.uploadDeadlineMinutes))}.`
         });
       }
+    } else {
+      // Parent proof is accepted only after the parent-managed session ends,
+      // and only on that booked calendar day.
+      if (date !== getTodayDateString()) {
+        return res.status(400).json({ error: 'Parent photos can only be uploaded on this slot’s scheduled date.' });
+      }
+      if (derived.plannedEndMinutes == null || clock.totalMinutes < derived.plannedEndMinutes) {
+        return res.status(400).json({
+          error: `Parent photos are available after ${formatHHMM(derived.payload.plannedEnd)} on the scheduled date.`
+        });
+      }
     }
 
     if ((derived.images.length + req.files.length) > MAX_IMAGES_PER_SLOT) {
