@@ -164,8 +164,6 @@ body {
 /* Game-inspired controls: the existing palette stays intact, while buttons
    get a tactile "level select" feel on hover and press. */
 button {
-  position: relative;
-  isolation: isolate;
   font-family: 'Oxanium', 'Plus Jakarta Sans', sans-serif;
   font-weight: 700;
   letter-spacing: 0.01em;

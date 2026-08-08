@@ -602,7 +602,7 @@ export const TeacherDashboard = () => {
             {/* Current Enrolled Students List */}
             <div className="space-y-2">
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Enrolled Students ({students.length})</h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 items-start sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {students.map((student) => (
                   <div key={student.student_id} className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                     {editingStudentId === student.student_id ? (
