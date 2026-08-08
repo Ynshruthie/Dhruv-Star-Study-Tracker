@@ -5,11 +5,13 @@ import ImageModal from '../components/ImageModal';
 import { AlertCircle, CalendarClock, CheckCircle2, Clock3, ImagePlus, Upload, Users } from 'lucide-react';
 
 const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-const getReviewWeekStart = () => {
+const getBookedWeekStart = () => {
   const today = new Date();
   const monday = new Date(today);
-  const offset = today.getDay() === 0 ? 6 : today.getDay() - 1;
-  monday.setDate(today.getDate() - offset);
+  // Student booking always targets the upcoming Monday–Saturday week.
+  // Use the same dates here so this family's parent view shows that student's
+  // saved slots as soon as they are booked.
+  monday.setDate(today.getDate() + (today.getDay() === 0 ? 1 : (8 - today.getDay()) % 7));
   return formatDate(monday);
 };
 
@@ -24,7 +26,7 @@ export const ParentDashboard = () => {
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [week, setWeek] = useState({ dates: [], by_date: {} });
-  const [weekStart] = useState(getReviewWeekStart);
+  const [weekStart] = useState(getBookedWeekStart);
 
   const fetchSlots = useCallback(async () => {
     setLoading(true);
@@ -134,8 +136,8 @@ export const ParentDashboard = () => {
       <section className="clean-card overflow-hidden">
         <div className="p-6 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">This Week&apos;s Study Plan &amp; Progress</h2>
-            <p className="text-sm text-slate-500">What your child studied from Monday through Saturday, including uploaded proof.</p>
+            <h2 className="text-lg font-bold text-slate-900">Booked Study Plan &amp; Progress</h2>
+            <p className="text-sm text-slate-500">Your child&apos;s saved Monday–Saturday slots and their uploaded proof.</p>
           </div>
           <span className="text-xs font-mono font-semibold text-slate-600">Week of {weekStart}</span>
         </div>

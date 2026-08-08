@@ -50,8 +50,11 @@ const getClockContext = (simulatedTime) => {
     return {
       hour,
       minute,
+      second: 0,
       totalMinutes: (hour * 60) + minute,
-      hhmm: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+      hhmm: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+      hhmmss: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`,
+      isSimulated: true
     };
   }
 
@@ -59,8 +62,11 @@ const getClockContext = (simulatedTime) => {
   return {
     hour: now.getHours(),
     minute: now.getMinutes(),
+    second: now.getSeconds(),
     totalMinutes: (now.getHours() * 60) + now.getMinutes(),
-    hhmm: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    hhmm: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
+    hhmmss: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`,
+    isSimulated: false
   };
 };
 
@@ -89,6 +95,19 @@ const formatHHMM = (value) => {
   const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
   const suffix = hour24 >= 12 ? 'PM' : 'AM';
   return `${hour12}:${String(minute).padStart(2, '0')} ${suffix}`;
+};
+
+const formatHHMMSS = (value) => {
+  if (!value || typeof value !== 'string') return value || '';
+  const [hourString, minuteString, secondString = '00'] = value.split(':');
+  const hour24 = Number(hourString);
+  const minute = Number(minuteString);
+  const second = Number(secondString);
+  if ([hour24, minute, second].some(Number.isNaN)) return value;
+
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  const suffix = hour24 >= 12 ? 'PM' : 'AM';
+  return `${hour12}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')} ${suffix}`;
 };
 
 const buildTimeRangeLabel = (start, end) => `${formatHHMM(start)} - ${formatHHMM(end)}`;
@@ -312,10 +331,11 @@ router.get('/today', authenticateToken, async (req, res) => {
 
     const formattedHours = (hours || []).map((hour) => formatHourResponse(hour, clock.totalMinutes));
 
+    res.set('Cache-Control', 'no-store');
     res.json({
       date,
       current_time: clock.hhmm,
-      current_time_label: formatHHMM(clock.hhmm),
+      current_time_label: clock.isSimulated ? formatHHMM(clock.hhmm) : formatHHMMSS(clock.hhmmss),
       scheduledCount: formattedHours.length,
       hours: formattedHours,
       teacher_acknowledgement: acknowledgement || null
@@ -421,6 +441,13 @@ router.post('/schedule/day', authenticateToken, async (req, res) => {
     const { data: existingRows, error: existingError } = await supabase
       .from('study_hours').select('*').eq('student_id', student_id).eq('date', date);
     if (existingError) throw existingError;
+    const existingPlanIsLocked = (existingRows || []).length === 4 && (existingRows || []).every((row) => {
+      const payload = parseStoredHourPayload(row.image_url);
+      return Boolean(payload.bookingConfirmedAt);
+    });
+    if (existingPlanIsLocked) {
+      return res.status(409).json({ error: 'This day is already booked and locked.' });
+    }
     const existingByHour = new Map((existingRows || []).map((row) => [row.hour_number, row]));
     const bookingConfirmedAt = new Date().toISOString();
 
@@ -492,6 +519,10 @@ router.post('/schedule', authenticateToken, async (req, res) => {
       .in('date', weekDates);
 
     if (existingError) throw existingError;
+
+    if ((existingRows || []).some((row) => parseStoredHourPayload(row.image_url).bookingConfirmedAt)) {
+      return res.status(409).json({ error: 'One or more days in this week are already booked and locked.' });
+    }
 
     const existingMap = new Map((existingRows || []).map((row) => [`${row.date}-${row.hour_number}`, row]));
 

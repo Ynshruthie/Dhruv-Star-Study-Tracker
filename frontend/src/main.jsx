@@ -10,5 +10,16 @@ createRoot(document.getElementById('root')).render(
 )
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
+  window.addEventListener('load', () => {
+    if (import.meta.env.DEV) {
+      // A production service worker can otherwise cache Vite's development
+      // modules and make a normal reload look stale or broken.
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((registration) => registration.unregister());
+      });
+      return;
+    }
+
+    navigator.serviceWorker.register('/sw.js');
+  });
 }

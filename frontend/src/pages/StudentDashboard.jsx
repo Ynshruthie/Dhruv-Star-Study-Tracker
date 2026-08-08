@@ -2,7 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { AuthContext } from '../context/AuthContextDefinition';
 import api from '../utils/api';
 import ImageModal from '../components/ImageModal';
-import { AlertCircle, BookOpen, CalendarClock, CheckCircle2, Clock3, ImagePlus, Play, Save, ThumbsUp, Timer, Upload } from 'lucide-react';
+import { AlertCircle, BookOpen, CalendarClock, CheckCircle2, Clock3, ImagePlus, LockKeyhole, Play, Save, ThumbsUp, Timer, Upload } from 'lucide-react';
 
 const SUBJECT_OPTIONS = ['Mathematics', 'Science', 'Physics', 'Chemistry', 'Biology', 'Social', 'Kannada', 'Hindi', 'English', 'Self Study', 'Notes Completion', 'Project', 'Exam Preparation'];
 const DEFAULT_SLOTS = [
@@ -36,8 +36,14 @@ const formatCountdown = (totalSeconds) => {
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
-const REVIEW_REFRESH_INTERVAL_MS = 3_000;
+const LIVE_REFRESH_INTERVAL_MS = 3_000;
 const buildFormSlots = () => DEFAULT_SLOTS.map((slot) => ({ ...slot }));
+const getBookedDates = (byDate = {}) => Object.fromEntries(
+  Object.entries(byDate).map(([day, slots]) => [
+    day,
+    slots.length === 4 && slots.every((slot) => slot.booking_confirmed_at)
+  ])
+);
 const buildEmptyHours = () => [1, 2, 3, 4].map((hourNumber) => ({
   hour_number: hourNumber, subject: '', scheduled_time_slot: '', attendance_status: 'UNSCHEDULED', manager_type: 'SELF',
   mark_button_enabled: false, upload_window_open: false, image_urls: [], photo_count: 0
@@ -62,6 +68,7 @@ export const StudentDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [weeklyPlanSaved, setWeeklyPlanSaved] = useState(false);
+  const [bookedDates, setBookedDates] = useState({});
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [uploadingHour, setUploadingHour] = useState(null);
@@ -74,7 +81,7 @@ export const StudentDashboard = () => {
   const fetchToday = useCallback(async ({ showLoader = false } = {}) => {
     if (showLoader) setLoading(true);
     try {
-      const { data } = await api.get('/study/today');
+      const { data } = await api.get('/study/today', { params: { refresh: Date.now() } });
       const nextHours = buildEmptyHours();
       (data.hours || []).forEach((hour) => { nextHours[hour.hour_number - 1] = hour; });
       setHours(nextHours);
@@ -92,6 +99,7 @@ export const StudentDashboard = () => {
   const fetchWeeklyPlan = useCallback(async () => {
     try {
       const { data } = await api.get(`/study/week?week_start=${weekStart}`);
+      setBookedDates(getBookedDates(data.by_date));
       const daySlots = data.by_date[selectedBookingDate] || [];
       if (daySlots.length !== 4 || !daySlots.every((slot) => slot.booking_confirmed_at)) {
         setWeeklyPlanSaved(false);
@@ -119,7 +127,7 @@ export const StudentDashboard = () => {
 
   useEffect(() => {
     // Keep the review card in sync when a teacher acknowledges work in their dashboard.
-    const refreshTimer = window.setInterval(fetchToday, REVIEW_REFRESH_INTERVAL_MS);
+    const refreshTimer = window.setInterval(fetchToday, LIVE_REFRESH_INTERVAL_MS);
     return () => window.clearInterval(refreshTimer);
   }, [fetchToday, simulatedTime]);
 
@@ -156,6 +164,7 @@ export const StudentDashboard = () => {
     };
   }), [weekStart]);
   const slotsLocked = !bookingAllowedForWeek;
+  const selectedDayLocked = slotsLocked || Boolean(bookedDates[selectedBookingDate]);
 
   const updateFormSlot = (index, field, value) => {
     setFormSlots((previous) => previous.map((slot, slotIndex) => slotIndex === index ? { ...slot, [field]: value } : slot));
@@ -173,6 +182,7 @@ export const StudentDashboard = () => {
       setWeeklyPlanSaved(true);
       setMessage(`Your plan for ${selectedBookingDate} has been saved.`);
       const { data: weekData } = await api.get(`/study/week?week_start=${weekStart}`);
+      setBookedDates(getBookedDates(weekData.by_date));
       const weekIsComplete = weekData.dates.every((day) => {
         const daySlots = weekData.by_date[day] || [];
         return daySlots.length === 4 && daySlots.every((slot) => slot.booking_confirmed_at);
@@ -257,20 +267,25 @@ export const StudentDashboard = () => {
         </div>
         <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-3"><div className="flex items-center gap-2 text-sm font-bold text-slate-900"><CalendarClock className="w-4 h-4 text-blue-600" />Select a study day</div><span className={`text-xs font-semibold ${bookingAllowedForWeek ? 'text-emerald-700' : 'text-amber-700'}`}>{bookingAllowedForWeek ? 'Sunday booking is open' : 'Booking opens next Sunday'}</span></div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">{bookingDates.map((bookingDate) => <button type="button" key={bookingDate.key} onClick={() => { setSelectedBookingDate(bookingDate.key); setWeeklyPlanSaved(false); setFormSlots(buildFormSlots()); setMessage(''); setError(''); }} aria-pressed={selectedBookingDate === bookingDate.key} className={`rounded-lg border px-2 py-2.5 text-center transition ${selectedBookingDate === bookingDate.key ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : 'border-blue-200 bg-white text-slate-600 hover:border-blue-400 hover:bg-blue-50'}`}><div className="text-[11px] font-bold uppercase tracking-wide">{bookingDate.weekday}</div><div className="text-lg font-extrabold leading-tight">{bookingDate.day}</div><div className="text-[11px]">{bookingDate.month}</div></button>)}</div>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">{bookingDates.map((bookingDate) => {
+            const isBooked = bookedDates[bookingDate.key];
+            const isSelected = selectedBookingDate === bookingDate.key;
+            return <button type="button" key={bookingDate.key} onClick={() => { setSelectedBookingDate(bookingDate.key); setWeeklyPlanSaved(false); setFormSlots(buildFormSlots()); setMessage(''); setError(''); }} aria-pressed={isSelected} className={`relative rounded-lg border px-2 py-2.5 text-center transition ${isSelected ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : isBooked ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:border-emerald-500 hover:bg-emerald-100' : 'border-blue-200 bg-white text-slate-600 hover:border-blue-400 hover:bg-blue-50'}`}><div className="text-[11px] font-bold uppercase tracking-wide">{bookingDate.weekday}</div><div className="text-lg font-extrabold leading-tight">{bookingDate.day}</div><div className="text-[11px]">{bookingDate.month}</div>{isBooked && <div className={`mt-1 inline-flex items-center gap-1 text-[10px] font-bold ${isSelected ? 'text-blue-100' : 'text-emerald-700'}`}><CheckCircle2 className="w-3 h-3" />Booked</div>}</button>;
+          })}</div>
           <p className="mt-3 text-xs text-slate-600">The active day is highlighted. Its saved slots load automatically when you select it.</p>
         </div>
         {!bookingAllowedForWeek && <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><CalendarClock className="w-5 h-5 shrink-0" /><span>You can view each day&apos;s slots now, but booking and changes open on the Sunday before this week.</span></div>}
         {weeklyPlanSaved && <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><CheckCircle2 className="w-5 h-5 shrink-0" /><span>Four slots are saved for {selectedBookingDate}.</span></div>}
+        {bookedDates[selectedBookingDate] && <div className="flex items-center gap-3 rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-700"><LockKeyhole className="w-5 h-5 shrink-0" /><span>This day is booked and locked. Its slot details can be viewed but not changed.</span></div>}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {formSlots.map((slot, index) => <div key={index} className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
-            <div className="flex items-center justify-between"><div><div className="text-sm font-bold text-slate-900">Slot {index + 1}</div><div className="text-xs text-slate-500">{slotsLocked ? 'Booking opens Sunday' : 'Choose subject, time and owner'}</div></div><span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200">{slot.manager_type === 'SELF' ? 'Student Handles' : 'Parent Handles'}</span></div>
-            <select value={slot.subject} onChange={(event) => updateFormSlot(index, 'subject', event.target.value)} disabled={slotsLocked} className="w-full corporate-select text-sm disabled:opacity-60">{SUBJECT_OPTIONS.map((subject) => <option key={subject} value={subject}>{subject}</option>)}</select>
-            <div className="grid grid-cols-2 gap-4"><input aria-label={`Slot ${index + 1} start time`} type="time" value={slot.planned_start} onChange={(event) => updateFormSlot(index, 'planned_start', event.target.value)} disabled={slotsLocked} className="w-full corporate-input text-sm disabled:opacity-60" /><input aria-label={`Slot ${index + 1} end time`} type="time" value={slot.planned_end} onChange={(event) => updateFormSlot(index, 'planned_end', event.target.value)} disabled={slotsLocked} className="w-full corporate-input text-sm disabled:opacity-60" /></div>
-            <div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => updateFormSlot(index, 'manager_type', 'SELF')} disabled={slotsLocked} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${slot.manager_type === 'SELF' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}>Self</button><button type="button" onClick={() => updateFormSlot(index, 'manager_type', 'PARENT')} disabled={slotsLocked} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${slot.manager_type === 'PARENT' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-600'}`}>Parent</button></div>
+            <div className="flex items-center justify-between"><div><div className="text-sm font-bold text-slate-900">Slot {index + 1}</div><div className="text-xs text-slate-500">{selectedDayLocked ? (bookedDates[selectedBookingDate] ? 'Booked and locked' : 'Booking opens Sunday') : 'Choose subject, time and owner'}</div></div><span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-blue-50 text-blue-700 border-blue-200">{slot.manager_type === 'SELF' ? 'Student Handles' : 'Parent Handles'}</span></div>
+            <select value={slot.subject} onChange={(event) => updateFormSlot(index, 'subject', event.target.value)} disabled={selectedDayLocked} className="w-full corporate-select text-sm disabled:opacity-60">{SUBJECT_OPTIONS.map((subject) => <option key={subject} value={subject}>{subject}</option>)}</select>
+            <div className="grid grid-cols-2 gap-4"><input aria-label={`Slot ${index + 1} start time`} type="time" value={slot.planned_start} onChange={(event) => updateFormSlot(index, 'planned_start', event.target.value)} disabled={selectedDayLocked} className="w-full corporate-input text-sm disabled:opacity-60" /><input aria-label={`Slot ${index + 1} end time`} type="time" value={slot.planned_end} onChange={(event) => updateFormSlot(index, 'planned_end', event.target.value)} disabled={selectedDayLocked} className="w-full corporate-input text-sm disabled:opacity-60" /></div>
+            <div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => updateFormSlot(index, 'manager_type', 'SELF')} disabled={selectedDayLocked} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${slot.manager_type === 'SELF' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600'}`}>Self</button><button type="button" onClick={() => updateFormSlot(index, 'manager_type', 'PARENT')} disabled={selectedDayLocked} className={`rounded-xl border px-4 py-2.5 text-sm font-semibold disabled:opacity-60 ${slot.manager_type === 'PARENT' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-600'}`}>Parent</button></div>
           </div>)}
         </div>
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4"><p className="text-sm text-slate-500">{bookingAllowedForWeek ? `Save the four slots for ${selectedBookingDate}. Click another day to continue planning it.` : 'Booking is locked until the Sunday before this week.'}</p><button type="submit" disabled={savingSchedule || slotsLocked} className="px-6 py-3 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-md transition flex items-center gap-2 disabled:opacity-50"><Save className="w-4 h-4" /><span>{savingSchedule ? 'Saving Day...' : slotsLocked ? 'Booking Opens Sunday' : weeklyPlanSaved ? 'Update Day Plan' : 'Save Day Plan'}</span></button></div>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4"><p className="text-sm text-slate-500">{bookedDates[selectedBookingDate] ? 'This day is confirmed and cannot be edited.' : bookingAllowedForWeek ? `Save the four slots for ${selectedBookingDate}. Click another day to continue planning it.` : 'Booking is locked until the Sunday before this week.'}</p><button type="submit" disabled={savingSchedule || selectedDayLocked} className="px-6 py-3 rounded-xl font-bold text-sm text-white bg-blue-600 hover:bg-blue-700 shadow-md transition flex items-center gap-2 disabled:opacity-50"><Save className="w-4 h-4" /><span>{savingSchedule ? 'Saving Day...' : bookedDates[selectedBookingDate] ? 'Day Locked' : slotsLocked ? 'Booking Opens Sunday' : 'Save Day Plan'}</span></button></div>
       </form>
 
       <div className="clean-card p-6 space-y-2"><div className="flex items-center gap-2 text-slate-900"><CalendarClock className="w-5 h-5 text-blue-600" /><h2 className="text-lg font-bold">Today&apos;s Slot Tracking</h2></div><p className="text-sm text-slate-500">Self slots can start during the first 15 minutes, run for one hour from the actual start time, then allow proof uploads for 15 minutes. Parent slots stay unchanged.</p></div>
