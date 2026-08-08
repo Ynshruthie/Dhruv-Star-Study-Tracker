@@ -83,6 +83,21 @@ Keep both files private and do not commit them to a public repository. If you ne
 
 ---
 
+## 📱 Installable web app
+
+The frontend is configured as a Progressive Web App (PWA). Once deployed over HTTPS, open it in a browser and use **Install app** (desktop) or **Add to Home Screen** (mobile) to install it.
+
+Before deploying the frontend, copy `frontend/.env.production.example` to `frontend/.env.production` and replace the example with the public HTTPS address of the backend API (including `/api`). Then build it:
+
+```bash
+cd frontend
+npm run build
+```
+
+Upload the generated `frontend/dist` folder to a free static host. The backend can be deployed separately on a free-tier Node.js host.
+
+---
+
 ## 📁 Project Structure
 
 ```
