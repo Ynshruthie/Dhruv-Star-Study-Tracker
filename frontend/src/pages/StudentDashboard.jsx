@@ -37,6 +37,14 @@ const formatCountdown = (totalSeconds) => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 const LIVE_REFRESH_INTERVAL_MS = 3_000;
+const formatLiveTime = (timestamp) => new Date(timestamp).toLocaleTimeString('en-US', {
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+});
+const formatHHMM = (time) => {
+  const [hour = 0, minute = 0] = String(time || '').split(':').map(Number);
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`;
+};
 const buildFormSlots = () => DEFAULT_SLOTS.map((slot) => ({ ...slot }));
 const getBookedDates = (byDate = {}) => Object.fromEntries(
   Object.entries(byDate).map(([day, slots]) => [
@@ -61,7 +69,6 @@ export const StudentDashboard = () => {
   const [weekStart, setWeekStart] = useState(getUpcomingWeekStart);
   const [selectedBookingDate, setSelectedBookingDate] = useState(getUpcomingWeekStart);
   const [date, setDate] = useState('');
-  const [currentTime, setCurrentTime] = useState('');
   const [hours, setHours] = useState(buildEmptyHours);
   const [teacherAcknowledgement, setTeacherAcknowledgement] = useState(null);
   const [formSlots, setFormSlots] = useState(buildFormSlots);
@@ -86,7 +93,6 @@ export const StudentDashboard = () => {
       (data.hours || []).forEach((hour) => { nextHours[hour.hour_number - 1] = hour; });
       setHours(nextHours);
       setDate(data.date);
-      setCurrentTime(data.current_time_label);
       setTeacherAcknowledgement(data.teacher_acknowledgement || null);
     } catch (err) {
       console.error('Failed to load student dashboard:', err);
@@ -135,6 +141,10 @@ export const StudentDashboard = () => {
     const clockTimer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(clockTimer);
   }, []);
+
+  const currentTime = simulatedTime
+    ? `${formatHHMM(simulatedTime)} (Simulated)`
+    : formatLiveTime(now);
 
   const getUploadCountdownSeconds = (hour) => {
     const deadlineMinutes = timeToMinutes(hour.upload_window_end);

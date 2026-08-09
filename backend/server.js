@@ -1,3 +1,9 @@
+// All study windows and booking dates are based on the academy's local clock.
+// Hosting providers commonly run Node in UTC, which otherwise makes the
+// dashboard time differ from the student's clock by several hours.
+require('dotenv').config();
+process.env.TZ = process.env.APP_TIMEZONE || 'Asia/Kolkata';
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');

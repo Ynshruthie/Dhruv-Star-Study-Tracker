@@ -5,6 +5,14 @@ import ImageModal from '../components/ImageModal';
 import { AlertCircle, CalendarClock, CheckCircle2, Clock3, ImagePlus, Upload, Users } from 'lucide-react';
 
 const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const formatLiveTime = (timestamp) => new Date(timestamp).toLocaleTimeString('en-US', {
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
+});
+const formatHHMM = (time) => {
+  const [hour = 0, minute = 0] = String(time || '').split(':').map(Number);
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`;
+};
 const timeToMinutes = (time) => {
   if (!time || !time.includes(':')) return null;
   const [hours, minutes] = time.split(':').map(Number);
@@ -35,7 +43,6 @@ const getBookedWeekStart = () => {
 export const ParentDashboard = () => {
   const { user, simulatedTime } = useContext(AuthContext);
   const [date, setDate] = useState('');
-  const [currentTime, setCurrentTime] = useState('');
   const [hours, setHours] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploadingHour, setUploadingHour] = useState(null);
@@ -53,7 +60,6 @@ export const ParentDashboard = () => {
     try {
       const { data } = await api.get('/study/today');
       setDate(data.date);
-      setCurrentTime(data.current_time_label);
     } catch (err) {
       console.error('Failed to load parent dashboard:', err);
       setError('Failed to load parent-managed slots.');
@@ -84,9 +90,13 @@ export const ParentDashboard = () => {
   }, [fetchSlots, fetchWeeklyStudy, simulatedTime]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 3_000);
+    const timer = window.setInterval(() => setNow(new Date()), 1_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  const currentTime = simulatedTime
+    ? `${formatHHMM(simulatedTime)} (Simulated)`
+    : formatLiveTime(now);
 
   const totalPhotos = useMemo(
     () => hours.reduce((sum, hour) => sum + (hour.photo_count || 0), 0),
