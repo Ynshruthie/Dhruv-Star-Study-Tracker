@@ -160,7 +160,7 @@ export const ParentDashboard = () => {
           </p>
         </div>
 
-        <div className="text-right text-sm text-slate-500">
+        <div className="w-full text-left text-sm text-slate-500 sm:w-auto sm:text-right">
           <div>Date: <span className="font-mono font-semibold text-slate-900">{date}</span></div>
           <div>Current Time: <span className="font-mono font-semibold text-blue-700">{currentTime}</span></div>
           <div>Parent Slots This Week: <span className="font-mono font-semibold text-slate-900">{hours.length}</span></div>

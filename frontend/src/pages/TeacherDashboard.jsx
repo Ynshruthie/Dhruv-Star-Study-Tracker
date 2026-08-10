@@ -223,10 +223,10 @@ export const TeacherDashboard = () => {
   });
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      <div className="clean-card p-2 inline-flex gap-2">
-        <button type="button" onClick={() => switchTab('monitor')} className={`px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition ${activeTab === 'monitor' ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50'}`}><Users className="w-4 h-4" /><span>Teacher Dashboard</span></button>
-        <button type="button" onClick={() => switchTab('admin')} className={`px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 transition ${activeTab === 'admin' ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50'}`}><UserPlus className="w-4 h-4" /><span>Admin Dashboard</span></button>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-8">
+      <div className="clean-card grid w-full grid-cols-2 gap-1 p-1.5 sm:inline-flex sm:w-auto sm:gap-2 sm:p-2">
+        <button type="button" onClick={() => switchTab('monitor')} className={`justify-center px-2 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 sm:gap-2 transition ${activeTab === 'monitor' ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50'}`}><Users className="w-4 h-4" /><span><span className="sm:hidden">Monitor</span><span className="hidden sm:inline">Teacher Dashboard</span></span></button>
+        <button type="button" onClick={() => switchTab('admin')} className={`justify-center px-2 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 sm:gap-2 transition ${activeTab === 'admin' ? 'bg-purple-600 text-white shadow-sm' : 'bg-white text-slate-600 hover:bg-slate-50'}`}><UserPlus className="w-4 h-4" /><span><span className="sm:hidden">Admin</span><span className="hidden sm:inline">Admin Dashboard</span></span></button>
       </div>
 
       {activeTab === 'monitor' && <>

@@ -9,13 +9,34 @@ const MAX_IMAGES_PER_SLOT = 25;
 const START_GRACE_MINUTES = 15;
 const STUDY_DURATION_MINUTES = 60;
 const UPLOAD_GRACE_MINUTES = 15;
+const ACADEMY_TIME_ZONE = process.env.APP_TIMEZONE || 'Asia/Kolkata';
+
+// Do not rely only on the host process time zone here. Some hosts run Node in
+// UTC even when APP_TIMEZONE is configured, which would make the API decide a
+// slot is not yet startable for students using the deployed app.
+const getAcademyClockParts = () => {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: ACADEMY_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(new Date());
+
+  return Object.fromEntries(
+    parts
+      .filter(({ type }) => type !== 'literal')
+      .map(({ type, value }) => [type, Number(value)])
+  );
+};
 
 const getTodayDateString = (customDate) => {
   if (customDate) return customDate;
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const { year, month: academyMonth, day } = getAcademyClockParts();
+  const month = String(academyMonth).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
 
@@ -58,14 +79,14 @@ const getClockContext = (simulatedTime) => {
     };
   }
 
-  const now = new Date();
+  const { hour, minute, second } = getAcademyClockParts();
   return {
-    hour: now.getHours(),
-    minute: now.getMinutes(),
-    second: now.getSeconds(),
-    totalMinutes: (now.getHours() * 60) + now.getMinutes(),
-    hhmm: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`,
-    hhmmss: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`,
+    hour,
+    minute,
+    second,
+    totalMinutes: (hour * 60) + minute,
+    hhmm: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+    hhmmss: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`,
     isSimulated: false
   };
 };

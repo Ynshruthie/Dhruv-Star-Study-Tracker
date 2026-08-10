@@ -1,10 +1,18 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { AuthContext } from '../context/AuthContextDefinition';
-import { LogOut, ShieldCheck, Clock, GraduationCap } from 'lucide-react';
+import { LogOut, ShieldCheck, Clock, GraduationCap, RefreshCw } from 'lucide-react';
 
 export const Navbar = () => {
   const { user, logout, simulatedTime } = useContext(AuthContext);
   const [timeStr, setTimeStr] = useState('');
+  const [reloading, setReloading] = useState(false);
+
+  const handleReload = () => {
+    setReloading(true);
+    // This is a document reload, rather than a dashboard data refresh, so the
+    // entire mobile app is restarted and fetches its latest application state.
+    window.location.reload();
+  };
 
   useEffect(() => {
     const updateTime = () => {
@@ -21,17 +29,17 @@ export const Navbar = () => {
   }, [simulatedTime]);
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm px-4 lg:px-8 py-3">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm px-3 sm:px-4 lg:px-8 py-3">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand Header */}
-        <div className="flex items-center gap-3">
+        <div className="min-w-0 flex items-center gap-2 sm:gap-3">
           <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center p-0.5 shadow-sm shrink-0">
             <img src="/logo.png" alt="Dhruv Star Academy Logo" className="w-full h-full object-contain" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">
-                DHRUV STAR <span className="text-blue-600 font-semibold">ACADEMY</span>
+              <h1 className="truncate text-sm sm:text-lg font-bold text-slate-900 tracking-tight">
+                DHRUV STAR <span className="hidden text-blue-600 font-semibold sm:inline">ACADEMY</span>
               </h1>
               <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider hidden sm:inline-block">
                 Study Tracker
@@ -49,7 +57,7 @@ export const Navbar = () => {
 
         {/* User Info & Actions */}
         {user && (
-          <div className="flex items-center gap-3">
+          <div className="shrink-0 flex items-center gap-2 sm:gap-3">
             <div className="hidden sm:flex items-center gap-2.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl">
               <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center">
                 {user.role === 'teacher' ? (
@@ -68,9 +76,18 @@ export const Navbar = () => {
               </div>
             </div>
 
-
-
             <button
+              type="button"
+              onClick={handleReload}
+              disabled={reloading}
+              aria-label="Reload app"
+              title="Reload app"
+              className="sm:hidden p-2 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 text-slate-700 border border-slate-200 rounded-lg transition flex items-center justify-center cursor-pointer disabled:opacity-60"
+            >
+              <RefreshCw className={`w-4 h-4 ${reloading ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              type="button"
               onClick={logout}
               className="px-3 py-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 text-slate-700 border border-slate-200 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
             >
