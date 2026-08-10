@@ -27,9 +27,19 @@ const formatWeekRange = (weekStart) => {
   return `${start.toLocaleDateString(undefined, formatOptions)} – ${end.toLocaleDateString(undefined, { ...formatOptions, year: 'numeric' })}`;
 };
 const timeToMinutes = (time) => {
-  if (!time || !time.includes(':')) return null;
-  const [hours, minutes] = time.split(':').map(Number);
-  return Number.isNaN(hours) || Number.isNaN(minutes) ? null : (hours * 60) + minutes;
+  const match = String(time || '').trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!match) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const meridiem = match[3]?.toUpperCase();
+  if (minutes > 59 || hours > (meridiem ? 12 : 23)) return null;
+
+  if (meridiem) {
+    hours = (hours % 12) + (meridiem === 'PM' ? 12 : 0);
+  }
+
+  return (hours * 60) + minutes;
 };
 const formatCountdown = (totalSeconds) => {
   const minutes = Math.floor(totalSeconds / 60);
