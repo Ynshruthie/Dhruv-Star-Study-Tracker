@@ -424,15 +424,28 @@ export const TeacherDashboard = () => {
                             </button>
                           ) : h.completed ? h.photo_count > 0 ? (
                             <button
+                              type="button"
                               onClick={() => {
                                 setActiveModalHour(h);
                                 setActiveModalStudent(st.name);
                               }}
+                              aria-label={`View ${h.photo_count} uploaded photo${h.photo_count === 1 ? '' : 's'} for ${st.name}'s ${h.subject} slot`}
                               className="group inline-flex flex-col items-center gap-1 p-2 rounded-xl bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 transition cursor-pointer"
                               title={`View ${h.subject} proof`}
                             >
                               <span className="text-emerald-700 font-bold flex items-center gap-1 text-xs">
                                 <Camera className="w-3.5 h-3.5 text-emerald-600" /> {h.photo_count > 1 ? `${h.photo_count} Photos` : '1 Photo'}
+                              </span>
+                              <div className="relative h-16 w-24 overflow-hidden rounded-lg border border-sky-200 bg-white shadow-sm">
+                                <img
+                                  src={h.image_urls?.[0] || h.image_url}
+                                  alt={`Preview of ${h.subject} proof`}
+                                  className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                                />
+                                {h.photo_count > 1 && <span className="absolute bottom-1 right-1 rounded-full bg-slate-900/75 px-1.5 py-0.5 text-[9px] font-bold text-white">+{h.photo_count - 1}</span>}
+                              </div>
+                              <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-bold text-sky-700 group-hover:bg-sky-100">
+                                <Eye className="w-3 h-3" /> View photos
                               </span>
                               <span className="text-[10px] text-slate-500 font-mono truncate max-w-20">
                                 {h.subject}
