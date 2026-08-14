@@ -71,8 +71,8 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
-  const login = async (student_id, password) => {
-    const res = await api.post('/auth/login', { student_id, password });
+  const login = async (student_id, password, role) => {
+    const res = await api.post('/auth/login', { student_id, password, role });
     const { token, user: userData } = res.data;
     localStorage.setItem(TOKEN_STORAGE_KEY, token);
     localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));

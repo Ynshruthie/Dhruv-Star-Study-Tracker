@@ -44,7 +44,7 @@ export const LoginPage = () => {
     setError('');
     setLoading(true);
     try {
-      await login(studentId, password);
+      await login(studentId, password, activeTab);
     } catch (err) {
       setError(err.response?.data?.error || 'Invalid credentials. Please check your ID and Password.');
     } finally {

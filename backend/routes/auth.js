@@ -11,9 +11,17 @@ router.post('/login', async (req, res) => {
   try {
     const loginId = (req.body.student_id || req.body.teacher_id || req.body.login_id || '').trim();
     const { password } = req.body;
+    const expectedRole = req.body.role;
 
     if (!loginId || !password) {
       return res.status(400).json({ error: 'Student ID / Teacher ID and Password are required' });
+    }
+
+    // The sign-in screen has separate Student and Teacher forms.  Require the
+    // caller to declare which one is being used, then verify it against the
+    // account stored in the database below.
+    if (expectedRole !== 'student' && expectedRole !== 'teacher') {
+      return res.status(400).json({ error: 'A valid login role is required.' });
     }
 
     const cleanId = loginId.toUpperCase();
@@ -25,6 +33,12 @@ router.post('/login', async (req, res) => {
 
     if (error || !user) {
       return res.status(401).json({ error: 'Invalid ID or password' });
+    }
+
+    if (user.role !== expectedRole) {
+      return res.status(403).json({
+        error: `This account is registered as a ${user.role}. Please use the ${user.role} sign-in.`
+      });
     }
 
     const hasBcryptHash = typeof user.password_hash === 'string' && /^\$2[aby]\$/.test(user.password_hash);
