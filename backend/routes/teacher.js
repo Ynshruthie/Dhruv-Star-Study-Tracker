@@ -192,7 +192,10 @@ router.get('/dashboard', authenticateToken, requireRole('teacher'), async (req, 
 
     const studentReport = (students || []).map(st => {
       const studentHoursObj = hoursMap.get(st.student_id) || {};
-      const nextBooking = nextBookingMap.get(st.student_id);
+      // When reviewing a past day, display only that day's historical record.
+      // Otherwise an empty past-day slot falls back to the next booking (often
+      // today's plan), which makes it look as though the date picker failed.
+      const nextBooking = date < today ? null : nextBookingMap.get(st.student_id);
       const acknowledgement = acknowledgementMap.get(st.student_id) || null;
 
       const hours = [1, 2, 3, 4].map(hNum => {

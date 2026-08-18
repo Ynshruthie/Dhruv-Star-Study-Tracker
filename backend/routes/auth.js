@@ -31,7 +31,14 @@ router.post('/login', async (req, res) => {
       .ilike('student_id', cleanId)
       .single();
 
-    if (error || !user) {
+    if (error) {
+      console.error('Login user lookup failed:', error.message);
+      return res.status(503).json({
+        error: 'The account service is unavailable. Please contact the administrator to check the Supabase configuration.'
+      });
+    }
+
+    if (!user) {
       return res.status(401).json({ error: 'Invalid ID or password' });
     }
 

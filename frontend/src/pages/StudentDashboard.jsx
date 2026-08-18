@@ -2,7 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { AuthContext } from '../context/AuthContextDefinition';
 import api from '../utils/api';
 import ImageModal from '../components/ImageModal';
-import { AlertCircle, BookOpen, CalendarClock, CheckCircle2, Clock3, ImagePlus, LockKeyhole, Play, Save, ThumbsUp, Timer, Upload } from 'lucide-react';
+import { AlertCircle, BookOpen, Calendar, CalendarClock, CheckCircle2, Clock3, ImagePlus, LockKeyhole, Play, Save, ThumbsUp, Timer, Upload } from 'lucide-react';
 
 const SUBJECT_OPTIONS = ['Mathematics', 'Science', 'Physics', 'Chemistry', 'Biology', 'Social', 'Kannada', 'Hindi', 'English', 'Self Study', 'Notes Completion', 'Project', 'Exam Preparation'];
 const DEFAULT_SLOTS = [
@@ -18,6 +18,22 @@ const getUpcomingWeekStart = () => {
   const monday = new Date(today);
   monday.setDate(today.getDate() + (today.getDay() === 0 ? 1 : (8 - today.getDay()) % 7));
   return formatDate(monday);
+};
+const getStudyWeekStart = (dateValue) => {
+  const selectedDate = typeof dateValue === 'string'
+    ? new Date(`${dateValue}T00:00:00`)
+    : new Date(dateValue);
+  const monday = new Date(selectedDate);
+  const dayOfWeek = monday.getDay();
+
+  // Study plans cover Monday through Saturday. Sunday belongs to the next
+  // bookable study week because the previous week's plan is complete.
+  monday.setDate(monday.getDate() + (dayOfWeek === 0 ? 1 : 1 - dayOfWeek));
+  return formatDate(monday);
+};
+const getDefaultStudyDate = () => {
+  const today = new Date();
+  return today.getDay() === 0 ? getStudyWeekStart(today) : formatDate(today);
 };
 const formatWeekRange = (weekStart) => {
   const start = new Date(`${weekStart}T00:00:00`);
@@ -76,9 +92,9 @@ const statusLabels = { PRESENT: 'Present', ABSENT: 'Absent', PENDING: 'Waiting',
 
 export const StudentDashboard = () => {
   const { user, simulatedTime } = useContext(AuthContext);
-  const [weekStart, setWeekStart] = useState(getUpcomingWeekStart);
-  const [selectedBookingDate, setSelectedBookingDate] = useState(getUpcomingWeekStart);
-  const [date, setDate] = useState('');
+  const [weekStart, setWeekStart] = useState(() => getStudyWeekStart(new Date()));
+  const [selectedBookingDate, setSelectedBookingDate] = useState(getDefaultStudyDate);
+  const [calendarDate, setCalendarDate] = useState(getDefaultStudyDate);
   const [hours, setHours] = useState(buildEmptyHours);
   const [teacherAcknowledgement, setTeacherAcknowledgement] = useState(null);
   const [formSlots, setFormSlots] = useState(buildFormSlots);
@@ -102,7 +118,6 @@ export const StudentDashboard = () => {
       const nextHours = buildEmptyHours();
       (data.hours || []).forEach((hour) => { nextHours[hour.hour_number - 1] = hour; });
       setHours(nextHours);
-      setDate(data.date);
       setTeacherAcknowledgement(data.teacher_acknowledgement || null);
     } catch (err) {
       console.error('Failed to load student dashboard:', err);
@@ -132,7 +147,7 @@ export const StudentDashboard = () => {
       setWeeklyPlanSaved(true);
     } catch (err) {
       console.error('Failed to load weekly plan:', err);
-      setError('Failed to load the upcoming weekly plan.');
+      setError('Failed to load the selected weekly plan.');
     }
   }, [selectedBookingDate, weekStart]);
 
@@ -192,6 +207,20 @@ export const StudentDashboard = () => {
     setError('');
   };
 
+  const handleCalendarDateChange = (value) => {
+    if (!value) return;
+    const selected = new Date(`${value}T00:00:00`);
+    const nextWeekStart = getStudyWeekStart(value);
+    const selectedDay = selected.getDay() === 0 ? nextWeekStart : value;
+    setCalendarDate(value);
+    setWeekStart(nextWeekStart);
+    setSelectedBookingDate(selectedDay);
+    setWeeklyPlanSaved(false);
+    setFormSlots(buildFormSlots());
+    setMessage('');
+    setError('');
+  };
+
   const handleSaveSchedule = async (event) => {
     event.preventDefault();
     setSavingSchedule(true);
@@ -213,6 +242,7 @@ export const StudentDashboard = () => {
         const nextWeekStart = formatDate(nextWeek);
         setWeekStart(nextWeekStart);
         setSelectedBookingDate(nextWeekStart);
+        setCalendarDate(nextWeekStart);
         setWeeklyPlanSaved(false);
         setFormSlots(buildFormSlots());
         setMessage(`All six days are booked. The next week (${formatWeekRange(nextWeekStart)}) is shown and opens for booking next Sunday.`);
@@ -268,12 +298,23 @@ export const StudentDashboard = () => {
         <div className="space-y-1">
           <div className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-50 border border-blue-200 px-3 py-1 rounded-full"><BookOpen className="w-3.5 h-3.5" /><span>Dhruv Star Academy • Student Dashboard</span></div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Students Lead the Day for <span className="text-blue-600">{user?.name}</span></h1>
-          <p className="text-sm text-slate-500">On Sunday, choose a Monday–Saturday date, then set its four study slots. Each day is saved separately.</p>
+          <p className="text-sm text-slate-500">View the current study week by default, or choose any date to view its Monday–Saturday plan. On Sunday, you can book the following week.</p>
         </div>
         <div className="text-right text-sm text-slate-500">
-          <div>Upcoming Week: <span className="font-semibold text-slate-900">{formatWeekRange(weekStart)}</span></div>
+          <div>Study Week: <span className="font-semibold text-slate-900">{formatWeekRange(weekStart)}</span></div>
           <div>Booking: <span className={`font-semibold ${bookingAllowedForWeek ? 'text-emerald-700' : 'text-amber-700'}`}>{bookingAllowedForWeek ? 'Open today' : 'Opens next Sunday'}</span></div>
-          <div>Today: <span className="font-mono font-semibold text-slate-900">{date}</span> · <span className="font-mono font-semibold text-blue-700">{currentTime}</span></div>
+          <label className="mt-2 inline-flex items-center justify-end gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-left">
+            <Calendar className="h-4 w-4 text-blue-600" />
+            <span className="text-xs font-semibold text-slate-600">Study date</span>
+            <input
+              type="date"
+              value={calendarDate}
+              onChange={(event) => handleCalendarDateChange(event.target.value)}
+              className="cursor-pointer bg-transparent text-xs font-mono font-semibold text-slate-900 outline-none"
+              aria-label="Choose a date to view its study week"
+            />
+          </label>
+          <div>Today: <span className="font-mono font-semibold text-blue-700">{currentTime}</span></div>
           <div>Today&apos;s Slots: <span className="font-mono font-semibold text-slate-900">{scheduledCount} / 4</span></div>
         </div>
       </div>
@@ -286,11 +327,11 @@ export const StudentDashboard = () => {
           <div className="flex gap-3 text-xs font-semibold"><span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Self: {selfCount}</span><span className="px-3 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Parent: {4 - selfCount}</span></div>
         </div>
         <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-3"><div className="flex items-center gap-2 text-sm font-bold text-slate-900"><CalendarClock className="w-4 h-4 text-blue-600" />Select a study day</div><span className={`text-xs font-semibold ${bookingAllowedForWeek ? 'text-emerald-700' : 'text-amber-700'}`}>{bookingAllowedForWeek ? 'Sunday booking is open' : 'Booking opens next Sunday'}</span></div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2 text-sm font-bold text-slate-900"><CalendarClock className="w-4 h-4 text-blue-600" />Select a study day</div><span className={`text-xs font-semibold ${bookingAllowedForWeek ? 'text-emerald-700' : 'text-amber-700'}`}>{bookingAllowedForWeek ? 'Sunday booking is open' : 'Booking opens next Sunday'}</span></div>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">{bookingDates.map((bookingDate) => {
             const isBooked = bookedDates[bookingDate.key];
             const isSelected = selectedBookingDate === bookingDate.key;
-            return <button type="button" key={bookingDate.key} onClick={() => { setSelectedBookingDate(bookingDate.key); setWeeklyPlanSaved(false); setFormSlots(buildFormSlots()); setMessage(''); setError(''); }} aria-pressed={isSelected} className={`relative rounded-lg border px-2 py-2.5 text-center transition ${isSelected ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : isBooked ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:border-emerald-500 hover:bg-emerald-100' : 'border-blue-200 bg-white text-slate-600 hover:border-blue-400 hover:bg-blue-50'}`}><div className="text-[11px] font-bold uppercase tracking-wide">{bookingDate.weekday}</div><div className="text-lg font-extrabold leading-tight">{bookingDate.day}</div><div className="text-[11px]">{bookingDate.month}</div>{isBooked && <div className={`mt-1 inline-flex items-center gap-1 text-[10px] font-bold ${isSelected ? 'text-blue-100' : 'text-emerald-700'}`}><CheckCircle2 className="w-3 h-3" />Booked</div>}</button>;
+            return <button type="button" key={bookingDate.key} onClick={() => { setSelectedBookingDate(bookingDate.key); setCalendarDate(bookingDate.key); setWeeklyPlanSaved(false); setFormSlots(buildFormSlots()); setMessage(''); setError(''); }} aria-pressed={isSelected} className={`relative rounded-lg border px-2 py-2.5 text-center transition ${isSelected ? 'border-blue-600 bg-blue-600 text-white shadow-sm' : isBooked ? 'border-emerald-300 bg-emerald-50 text-emerald-800 hover:border-emerald-500 hover:bg-emerald-100' : 'border-blue-200 bg-white text-slate-600 hover:border-blue-400 hover:bg-blue-50'}`}><div className="text-[11px] font-bold uppercase tracking-wide">{bookingDate.weekday}</div><div className="text-lg font-extrabold leading-tight">{bookingDate.day}</div><div className="text-[11px]">{bookingDate.month}</div>{isBooked && <div className={`mt-1 inline-flex items-center gap-1 text-[10px] font-bold ${isSelected ? 'text-blue-100' : 'text-emerald-700'}`}><CheckCircle2 className="w-3 h-3" />Booked</div>}</button>;
           })}</div>
           <p className="mt-3 text-xs text-slate-600">The active day is highlighted. Its saved slots load automatically when you select it.</p>
         </div>

@@ -2,7 +2,7 @@ import React, { useCallback, useContext, useEffect, useMemo, useState } from 're
 import { AuthContext } from '../context/AuthContextDefinition';
 import api from '../utils/api';
 import ImageModal from '../components/ImageModal';
-import { AlertCircle, CalendarClock, CheckCircle2, Clock3, ImagePlus, Upload, Users } from 'lucide-react';
+import { AlertCircle, Calendar, CalendarClock, CheckCircle2, Clock3, ImagePlus, Upload, Users } from 'lucide-react';
 
 const formatDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const formatLiveTime = (timestamp) => new Date(timestamp).toLocaleTimeString('en-US', {
@@ -30,13 +30,16 @@ const getParentUploadState = (hour, now) => {
   }
   return { isOpen: true, message: 'Upload is open for the rest of this scheduled day.' };
 };
-const getBookedWeekStart = () => {
-  const today = new Date();
-  const monday = new Date(today);
-  // Student booking always targets the upcoming Monday–Saturday week.
-  // Use the same dates here so this family's parent view shows that student's
-  // saved slots as soon as they are booked.
-  monday.setDate(today.getDate() + (today.getDay() === 0 ? 1 : (8 - today.getDay()) % 7));
+const getWeekStartForDate = (dateValue) => {
+  const selectedDate = typeof dateValue === 'string'
+    ? new Date(`${dateValue}T00:00:00`)
+    : new Date(dateValue);
+  const monday = new Date(selectedDate);
+  const dayOfWeek = monday.getDay();
+
+  // Study plans run Monday–Saturday. On Sunday, the previous plan has ended,
+  // so the default and calendar view move to the following study week.
+  monday.setDate(monday.getDate() + (dayOfWeek === 0 ? 1 : 1 - dayOfWeek));
   return formatDate(monday);
 };
 
@@ -50,8 +53,9 @@ export const ParentDashboard = () => {
   const [message, setMessage] = useState('');
   const [selectedImage, setSelectedImage] = useState(null);
   const [week, setWeek] = useState({ dates: [], by_date: {} });
-  const [weekStart] = useState(getBookedWeekStart);
+  const [selectedDate, setSelectedDate] = useState(() => formatDate(new Date()));
   const [now, setNow] = useState(() => new Date());
+  const weekStart = useMemo(() => getWeekStartForDate(selectedDate), [selectedDate]);
 
   const fetchSlots = useCallback(async () => {
     setLoading(true);
@@ -156,7 +160,7 @@ export const ParentDashboard = () => {
             Parent Upload Space for <span className="text-amber-600">{user?.name}</span>
           </h1>
           <p className="text-sm text-slate-500">
-            Parent-managed slots become available here on their scheduled date. The upcoming week below shows every slot your child assigned to a parent.
+            Parent-managed slots become available here on their scheduled date. The current study week is shown by default; choose another date to view its week.
           </p>
         </div>
 
@@ -166,6 +170,17 @@ export const ParentDashboard = () => {
           <div>Parent Slots This Week: <span className="font-mono font-semibold text-slate-900">{hours.length}</span></div>
           <div>Scheduled This Week: <span className="font-mono font-semibold text-slate-900">{scheduledParentSlots.length}</span></div>
           <div>Total Photos: <span className="font-mono font-semibold text-slate-900">{totalPhotos}</span></div>
+          <label className="mt-2 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-left sm:text-right">
+            <Calendar className="h-4 w-4 text-slate-500" />
+            <span className="text-xs font-semibold text-slate-600">View date</span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className="cursor-pointer bg-transparent text-xs font-mono font-semibold text-slate-900 outline-none"
+              aria-label="Choose a date to view its study week"
+            />
+          </label>
         </div>
       </div>
 
@@ -184,7 +199,7 @@ export const ParentDashboard = () => {
         <div className="p-6 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Booked Study Plan &amp; Progress</h2>
-            <p className="text-sm text-slate-500">Your child&apos;s saved Monday–Saturday slots and their uploaded proof.</p>
+            <p className="text-sm text-slate-500">Your child&apos;s saved Monday–Saturday slots and their uploaded proof for the selected week.</p>
           </div>
           <span className="text-xs font-mono font-semibold text-slate-600">Week of {weekStart}</span>
         </div>
@@ -215,7 +230,7 @@ export const ParentDashboard = () => {
       {hours.length === 0 ? (
         <div className="clean-card p-6 text-sm text-slate-600 flex items-center gap-3">
           <CalendarClock className="w-5 h-5 text-slate-400" />
-          <span>No parent-managed slots are booked for this student&apos;s upcoming week.</span>
+          <span>No parent-managed slots are booked for this selected study week.</span>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
