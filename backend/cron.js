@@ -1,6 +1,9 @@
 const cron = require('node-cron');
 const { supabase } = require('./db');
 
+const PHOTO_RETENTION_DAYS = 14;
+const PHOTO_RETENTION_MS = PHOTO_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
 const parseImageUrls = (raw) => {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -44,10 +47,10 @@ const extractFilePathFromUrl = (url) => {
 };
 
 const cleanupExpiredStudyImages = async () => {
-  console.log('Running 48-hour photo cleanup cron job...');
+  console.log(`Running ${PHOTO_RETENTION_DAYS}-day photo cleanup cron job...`);
 
   try {
-    const thresholdDate = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const thresholdDate = new Date(Date.now() - PHOTO_RETENTION_MS).toISOString();
 
     const { data: oldRecords, error: fetchError } = await supabase
       .from('study_hours')
@@ -135,4 +138,4 @@ const cleanupExpiredStudyImages = async () => {
 
 cron.schedule('0 * * * *', cleanupExpiredStudyImages);
 
-console.log('Cron job for 48-hour image cleanup initialized.');
+console.log(`Cron job for ${PHOTO_RETENTION_DAYS}-day image cleanup initialized.`);
