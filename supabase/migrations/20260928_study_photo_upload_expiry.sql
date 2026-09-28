@@ -17,3 +17,5 @@ JOIN public.study_hours AS hours
   ON position(objects.name IN hours.image_url) > 0
 WHERE objects.bucket_id = 'study-photos'
 ON CONFLICT (object_path) DO NOTHING;
+
+NOTIFY pgrst, 'reload schema';
