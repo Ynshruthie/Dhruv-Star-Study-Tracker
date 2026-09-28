@@ -5,6 +5,7 @@ import { jwtVerify, SignJWT } from "npm:jose@5";
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const jwtSecret = Deno.env.get("JWT_SECRET")!;
+const cleanupSecret = Deno.env.get("PHOTO_CLEANUP_SECRET") ?? jwtSecret;
 const inviteCode = Deno.env.get("TEACHER_INVITE_CODE") ?? "";
 const frontendOrigin = Deno.env.get("FRONTEND_ORIGIN") ??
   "https://ynshruthie.github.io";
@@ -269,6 +270,84 @@ const getMentor = async (value: string) => {
   return data.student_id;
 };
 
+const cleanupExpiredPhotos = async () => {
+  const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+  const { data: expired, error } = await supabase.from("study_photo_uploads")
+    .select("id, object_path, study_hour_id")
+    .lte("uploaded_at", cutoff)
+    .order("uploaded_at")
+    .limit(500);
+  if (error) throw error;
+  if (!expired?.length) return { deleted: 0 };
+
+  let deletedCount = 0;
+  for (let offset = 0; offset < expired.length; offset += 100) {
+    const batch = expired.slice(offset, offset + 100);
+    const byHour = new Map<number, string[]>();
+    for (const photo of batch) {
+      const paths = byHour.get(photo.study_hour_id) ?? [];
+      paths.push(photo.object_path);
+      byHour.set(photo.study_hour_id, paths);
+    }
+
+    let referencesCleared = true;
+    for (const [hourId, paths] of byHour) {
+      const { data: row, error: rowError } = await supabase.from("study_hours")
+        .select("id, image_url")
+        .eq("id", hourId)
+        .maybeSingle();
+      if (rowError) throw rowError;
+      if (!row) continue;
+
+      let current = row;
+      let saved = false;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const payload = parsePayload(current.image_url);
+        payload.images = payload.images.filter((image: string) =>
+          !paths.includes(image) && !paths.some((path) => image.includes(path))
+        );
+        const { data: updated, error: updateError } = await supabase.from(
+          "study_hours",
+        )
+          .update({ image_url: serializePayload(payload) })
+          .eq("id", hourId)
+          .eq("image_url", current.image_url)
+          .select("id")
+          .maybeSingle();
+        if (updateError) throw updateError;
+        if (updated) {
+          saved = true;
+          break;
+        }
+        const { data: latest, error: latestError } = await supabase.from(
+          "study_hours",
+        )
+          .select("id, image_url")
+          .eq("id", hourId)
+          .maybeSingle();
+        if (latestError) throw latestError;
+        if (!latest) {
+          saved = true;
+          break;
+        }
+        current = latest;
+      }
+      if (!saved) referencesCleared = false;
+    }
+    if (!referencesCleared) continue;
+
+    const { error: storageError } = await supabase.storage.from("study-photos")
+      .remove(batch.map((photo) => photo.object_path));
+    if (storageError) throw storageError;
+    const { error: metadataError } = await supabase.from("study_photo_uploads")
+      .delete()
+      .in("id", batch.map((photo) => photo.id));
+    if (metadataError) throw metadataError;
+    deletedCount += batch.length;
+  }
+  return { deleted: deletedCount };
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -289,6 +368,15 @@ Deno.serve(async (req: Request) => {
 
     if (method === "GET" && path === "/health") {
       return respond({ status: "ok", time: new Date().toISOString() });
+    }
+    if (method === "POST" && path === "/maintenance/cleanup") {
+      if (
+        !cleanupSecret ||
+        req.headers.get("authorization") !== `Bearer ${cleanupSecret}`
+      ) {
+        return fail("Access denied.", 401);
+      }
+      return respond(await cleanupExpiredPhotos());
     }
     if (method === "POST" && path === "/auth/login") {
       const loginId = String(
@@ -614,6 +702,7 @@ Deno.serve(async (req: Request) => {
           return fail(`You can upload up to ${maxPhotos} photos for one slot.`);
         }
         const verifiedPaths: string[] = [];
+        const uploadedAtByPath = new Map<string, string>();
         for (const objectPath of paths as string[]) {
           const folder = objectPath.slice(0, objectPath.lastIndexOf("/"));
           const filename = objectPath.slice(objectPath.lastIndexOf("/") + 1);
@@ -625,7 +714,24 @@ Deno.serve(async (req: Request) => {
             return fail("An uploaded photo could not be verified.");
           }
           verifiedPaths.push(objectPath);
+          const storageObject = found.find((entry) => entry.name === filename);
+          uploadedAtByPath.set(
+            objectPath,
+            storageObject?.created_at || new Date().toISOString(),
+          );
         }
+        const { error: metadataError } = await supabase.from(
+          "study_photo_uploads",
+        )
+          .upsert(
+            verifiedPaths.map((objectPath) => ({
+              object_path: objectPath,
+              study_hour_id: row.id,
+              uploaded_at: uploadedAtByPath.get(objectPath),
+            })),
+            { onConflict: "object_path", ignoreDuplicates: true },
+          );
+        if (metadataError) throw metadataError;
         const payload = { ...p, images: [...p.images, ...verifiedPaths] };
         const { data: updated, error: updateError } = await supabase.from(
           "study_hours",

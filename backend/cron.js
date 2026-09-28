@@ -1,141 +1,93 @@
 const cron = require('node-cron');
 const { supabase } = require('./db');
 
-const PHOTO_RETENTION_DAYS = 14;
-const PHOTO_RETENTION_MS = PHOTO_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const PHOTO_RETENTION_MS = 48 * 60 * 60 * 1000;
 
-const parseImageUrls = (raw) => {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw === 'string') {
-    const trimmed = raw.trim();
-    if (!trimmed || trimmed === 'null' || trimmed === '[]') return [];
-    if (trimmed.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        return Array.isArray(parsed.images) ? parsed.images : [];
-      } catch (e) {}
-    }
-    if (trimmed.startsWith('[')) {
-      try { return JSON.parse(trimmed); } catch (e) {}
-    }
-    return [trimmed];
-  }
-  return [];
-};
-
-const extractFilePathFromUrl = (url) => {
+const parsePayload = (raw) => {
+  if (typeof raw !== 'string') return null;
   try {
-    const normalizedUrl = String(url).trim();
-    if (!normalizedUrl) return null;
-
-    const bucketStr = '/storage/v1/object/public/study-photos/';
-    const idx = normalizedUrl.indexOf(bucketStr);
-    if (idx !== -1) {
-      return normalizedUrl.substring(idx + bucketStr.length).split('?')[0];
-    }
-
-    const legacyBucketStr = '/study-photos/';
-    const legacyIdx = normalizedUrl.indexOf(legacyBucketStr);
-    if (legacyIdx !== -1) {
-      return normalizedUrl.substring(legacyIdx + legacyBucketStr.length).split('?')[0];
-    }
-  } catch (e) {
-    console.error('Error extracting path from URL:', url);
+    const payload = JSON.parse(raw);
+    return payload && typeof payload === 'object' && Array.isArray(payload.images)
+      ? payload
+      : null;
+  } catch {
+    return null;
   }
-  return null;
 };
 
 const cleanupExpiredStudyImages = async () => {
-  console.log(`Running ${PHOTO_RETENTION_DAYS}-day photo cleanup cron job...`);
+  const cutoff = new Date(Date.now() - PHOTO_RETENTION_MS).toISOString();
+  const { data: expired, error } = await supabase
+    .from('study_photo_uploads')
+    .select('id, object_path, study_hour_id')
+    .lte('uploaded_at', cutoff)
+    .order('uploaded_at')
+    .limit(500);
 
-  try {
-    const thresholdDate = new Date(Date.now() - PHOTO_RETENTION_MS).toISOString();
+  if (error) {
+    console.error('Could not find expired study photos:', error.message);
+    return;
+  }
+  if (!expired?.length) return;
 
-    const { data: oldRecords, error: fetchError } = await supabase
-      .from('study_hours')
-      .select('id, image_url, created_at')
-      .lt('created_at', thresholdDate);
-
-    if (fetchError) {
-      console.error('Error fetching old records for cleanup:', fetchError);
-      return;
+  for (let offset = 0; offset < expired.length; offset += 100) {
+    const batch = expired.slice(offset, offset + 100);
+    const paths = batch.map((photo) => photo.object_path);
+    const { error: storageError } = await supabase.storage
+      .from('study-photos')
+      .remove(paths);
+    if (storageError) {
+      console.error('Could not delete expired study photos:', storageError.message);
+      continue;
     }
 
-    if (!oldRecords || oldRecords.length === 0) {
-      console.log('No old photos to clean up.');
-      return;
+    const byHour = new Map();
+    for (const photo of batch) {
+      const hourPaths = byHour.get(photo.study_hour_id) || [];
+      hourPaths.push(photo.object_path);
+      byHour.set(photo.study_hour_id, hourPaths);
     }
 
-    const filesToDelete = [];
-    const recordIdsToClear = [];
-
-    for (const record of oldRecords) {
-      const urls = parseImageUrls(record.image_url);
-      if (urls.length === 0) continue;
-
-      for (const url of urls) {
-        const path = extractFilePathFromUrl(url);
-        if (path) filesToDelete.push(path);
-      }
-
-      recordIdsToClear.push(record.id);
-    }
-
-    if (filesToDelete.length > 0) {
-      const { error: deleteError } = await supabase.storage
-        .from('study-photos')
-        .remove(filesToDelete);
-
-      if (deleteError) {
-        console.error('Error deleting files from Storage:', deleteError);
-      } else {
-        console.log(`Successfully deleted ${filesToDelete.length} files from Storage.`);
-      }
-    }
-
-    if (recordIdsToClear.length > 0) {
-      const { data: staleRows } = await supabase
+    let databaseUpdated = true;
+    for (const [hourId, hourPaths] of byHour) {
+      const { data: row, error: readError } = await supabase
         .from('study_hours')
         .select('id, image_url')
-        .in('id', recordIdsToClear);
-
-      const updates = (staleRows || []).map((row) => {
-        const trimmed = typeof row.image_url === 'string' ? row.image_url.trim() : '';
-        if (trimmed.startsWith('{')) {
-          try {
-            const parsed = JSON.parse(trimmed);
-            return {
-              id: row.id,
-              image_url: JSON.stringify({
-                ...parsed,
-                images: []
-              })
-            };
-          } catch (e) {}
-        }
-
-        return {
-          id: row.id,
-          image_url: '[]'
-        };
-      });
-
+        .eq('id', hourId)
+        .maybeSingle();
+      if (readError) {
+        databaseUpdated = false;
+        console.error('Could not read expired photo references:', readError.message);
+        break;
+      }
+      if (!row) continue;
+      const payload = parsePayload(row.image_url);
+      if (!payload) continue;
+      payload.images = payload.images.filter((image) =>
+        !hourPaths.some((path) => image === path || String(image).includes(path))
+      );
       const { error: updateError } = await supabase
         .from('study_hours')
-        .upsert(updates, { onConflict: 'id' });
-
+        .update({ image_url: JSON.stringify(payload) })
+        .eq('id', hourId);
       if (updateError) {
-        console.error('Error clearing image URLs in DB:', updateError);
-      } else {
-        console.log(`Successfully cleared image URLs for ${recordIdsToClear.length} records.`);
+        databaseUpdated = false;
+        console.error('Could not clear expired photo references:', updateError.message);
+        break;
       }
     }
-  } catch (err) {
-    console.error('Failed to run cleanup cron job:', err);
+
+    if (!databaseUpdated) continue;
+    const { error: metadataError } = await supabase
+      .from('study_photo_uploads')
+      .delete()
+      .in('id', batch.map((photo) => photo.id));
+    if (metadataError) {
+      console.error('Could not clear expired photo metadata:', metadataError.message);
+    } else {
+      console.log(`Deleted ${batch.length} study photos older than 48 hours.`);
+    }
   }
 };
 
-cron.schedule('0 * * * *', cleanupExpiredStudyImages);
-
-console.log(`Cron job for ${PHOTO_RETENTION_DAYS}-day image cleanup initialized.`);
+cron.schedule('* * * * *', cleanupExpiredStudyImages, { timezone: 'Asia/Kolkata' });

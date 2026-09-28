@@ -87,16 +87,17 @@ Keep both files private and do not commit them to a public repository. If you ne
 
 The frontend is configured as a Progressive Web App (PWA). Once deployed over HTTPS, open it in a browser and use **Install app** (desktop) or **Add to Home Screen** (mobile) to install it.
 
-The frontend is deployed to GitHub Pages. The API can run as a Supabase Edge Function, so no separate Express host is required. The Edge Function uses the existing Supabase database and Storage bucket.
+The frontend is deployed to GitHub Pages. The API can run as a Supabase Edge Function, so no separate Express host is required. The Edge Function uses the existing Supabase database and Storage bucket. Study proof images become eligible for deletion 48 hours after their individual Storage upload time, not after the slot is booked. Supabase Cron checks every minute, so physical deletion occurs on the first run after the 48-hour mark.
 
 Before switching the live frontend to the Supabase API:
 
-1. Run `supabase/migrations/20260928_limit_study_photo_uploads.sql` in the Supabase SQL Editor to make the photo bucket private and cap proof images at 5 MB each.
-2. In Supabase **Project Settings > Edge Functions > Secrets**, add the existing `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, and `TEACHER_INVITE_CODE` values from `backend/.env`, plus `FRONTEND_ORIGIN=https://ynshruthie.github.io`. Supabase supplies `SUPABASE_URL`.
-4. In GitHub **Settings > Secrets and variables > Actions > Variables**, add `VITE_SUPABASE_ANON_KEY` with the Supabase anon/public key. This key is designed for browser use; never add the service-role key as a Vite variable.
-5. Create a Supabase personal access token, then add it in GitHub **Settings > Secrets and variables > Actions > Secrets** as `SUPABASE_ACCESS_TOKEN`.
-6. In GitHub **Settings > Pages**, set the source to **GitHub Actions**.
-7. Push to `main` or `Shruthi`. The workflow deploys `supabase/functions/api`, checks its health, then publishes the frontend configured in `frontend/.env.production`.
+1. Run `supabase/migrations/20260928_limit_study_photo_uploads.sql` if not already applied, then run `supabase/migrations/20260928_study_photo_upload_expiry.sql` in the Supabase SQL Editor. The expiry migration backfills existing photos using Storage upload timestamps.
+2. In Supabase **Project Settings > Edge Functions > Secrets**, add the existing `JWT_SECRET` and `TEACHER_INVITE_CODE` values from `backend/.env`, plus `FRONTEND_ORIGIN=https://ynshruthie.github.io`. Supabase provides `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` automatically.
+3. In GitHub **Settings > Secrets and variables > Actions > Variables**, add `VITE_SUPABASE_ANON_KEY` with the Supabase anon/public key. Never add the service-role key as a Vite variable.
+4. Create a Supabase personal access token, then add it in GitHub **Settings > Secrets and variables > Actions > Secrets** as `SUPABASE_ACCESS_TOKEN`.
+5. In GitHub **Settings > Pages**, set the source to **GitHub Actions**.
+6. Push to `main` or `Shruthi`. The workflow deploys `supabase/functions/api`, checks its health, then publishes the frontend configured in `frontend/.env.production`.
+7. After the function deploy succeeds, add a Vault secret named `photo_cleanup_bearer` with the same value as `JWT_SECRET`, then run `supabase/schedule-photo-cleanup.sql` in the SQL Editor to enable minute-by-minute cleanup.
 
 The site is `https://ynshruthie.github.io/Dhruv-Star-Study-Tracker/`. Keep the Supabase service-role key and JWT secret server-side. Proof images use private Storage with one-hour signed viewing URLs; the SQL migration removes the app's previous public read/upload policies.
 
