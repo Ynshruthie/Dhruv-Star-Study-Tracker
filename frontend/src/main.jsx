@@ -20,6 +20,6 @@ if ('serviceWorker' in navigator) {
       return;
     }
 
-    navigator.serviceWorker.register('/sw.js');
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`);
   });
 }

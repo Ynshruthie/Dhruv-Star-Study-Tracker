@@ -87,14 +87,15 @@ Keep both files private and do not commit them to a public repository. If you ne
 
 The frontend is configured as a Progressive Web App (PWA). Once deployed over HTTPS, open it in a browser and use **Install app** (desktop) or **Add to Home Screen** (mobile) to install it.
 
-Before deploying the frontend, copy `frontend/.env.production.example` to `frontend/.env.production` and replace the example with the public HTTPS address of the backend API (including `/api`). Then build it:
+The frontend can be deployed to GitHub Pages by the included Actions workflow. GitHub Pages only hosts static files, so the Express backend and its database must remain on a separate host.
 
-```bash
-cd frontend
-npm run build
-```
+Before the first deployment:
 
-Upload the generated `frontend/dist` folder to a free static host. The backend can be deployed separately on a free-tier Node.js host.
+1. In the repository settings, add an Actions variable named `VITE_API_URL` with the public HTTPS backend API URL, including `/api`.
+2. In **Settings > Pages**, set the build and deployment source to **GitHub Actions**.
+3. Push to `main` or `Shruthi`, or manually run **Deploy frontend to GitHub Pages** from the Actions tab.
+
+The workflow builds `frontend` and deploys it at `https://ynshruthie.github.io/Dhruv-Star-Study-Tracker/`. The backend must allow browser requests from that origin. For local builds, set `VITE_API_URL` in `frontend/.env.production` as described in `frontend/.env.production.example`.
 
 ---
 

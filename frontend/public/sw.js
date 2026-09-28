@@ -1,5 +1,5 @@
 const CACHE_NAME = 'dhruv-star-shell-v2';
-const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/logo.png'];
+const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './logo.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
@@ -19,7 +19,8 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/') || url.pathname.startsWith('/uploads/')) return;
+  const scopePath = new URL(self.registration.scope).pathname;
+  if (url.origin !== self.location.origin || !url.pathname.startsWith(scopePath)) return;
 
   // Prefer the latest deployed app on every normal reload. The cached shell
   // is only used when the user is offline or the network is unavailable.
@@ -30,6 +31,6 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
       }
       return response;
-    }).catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
+    }).catch(() => caches.match(event.request).then((cached) => cached || caches.match('./index.html')))
   );
 });

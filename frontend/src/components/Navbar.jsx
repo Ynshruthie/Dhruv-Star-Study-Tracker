@@ -34,7 +34,7 @@ export const Navbar = () => {
         {/* Brand Header */}
         <div className="min-w-0 flex items-center gap-2 sm:gap-3">
           <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center p-0.5 shadow-sm shrink-0">
-            <img src="/logo.png" alt="Dhruv Star Academy Logo" className="w-full h-full object-contain" />
+            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Dhruv Star Academy Logo" className="w-full h-full object-contain" />
           </div>
           <div>
             <div className="flex items-center gap-2">

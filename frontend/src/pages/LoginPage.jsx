@@ -126,7 +126,7 @@ export const LoginPage = () => {
           {/* Header */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-24 h-24 rounded-2xl bg-white border border-slate-200 p-1.5 shadow-md mb-4 overflow-hidden">
-              <img src="/logo.png" alt="Dhruv Star Academy Logo" className="w-full h-full object-contain" />
+              <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Dhruv Star Academy Logo" className="w-full h-full object-contain" />
             </div>
             <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">
               Dhruv Star Study Tracker
