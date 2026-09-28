@@ -91,7 +91,7 @@ The frontend can be deployed to GitHub Pages by the included Actions workflow. G
 
 Before the first deployment:
 
-1. In the repository settings, add an Actions variable named `VITE_API_URL` with the public HTTPS backend API URL, including `/api`.
+1. Confirm `frontend/.env.production` contains the public HTTPS backend API URL, including `/api`.
 2. In **Settings > Pages**, set the build and deployment source to **GitHub Actions**.
 3. Push to `main` or `Shruthi`, or manually run **Deploy frontend to GitHub Pages** from the Actions tab.
 

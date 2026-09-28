@@ -30,14 +30,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
-      - name: Validate backend URL
-        run: test -n "$VITE_API_URL"
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
       - name: Build frontend
         run: npm run build --prefix frontend
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
