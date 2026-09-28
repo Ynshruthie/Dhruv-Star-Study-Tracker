@@ -32,16 +32,6 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/study', studyRoutes);
 app.use('/api/teacher', teacherRoutes);
 
-// Optional trigger to re-seed database
-app.post('/api/seed', async (req, res) => {
-  try {
-    await seed();
-    res.json({ message: 'Database re-seeded successfully with demo accounts and data!' });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to seed database: ' + err.message });
-  }
-});
-
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', time: new Date().toISOString() });
@@ -56,7 +46,7 @@ initDb().then(async () => {
       .select('id')
       .limit(1);
 
-    if (!error && (!users || users.length === 0)) {
+    if (process.env.NODE_ENV !== 'production' && !error && (!users || users.length === 0)) {
       console.log('No users found in Supabase. Seeding demo accounts automatically...');
       await seed();
     }

@@ -1,6 +1,10 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dhruv-star-academy-secret-key-2026';
+const configuredJwtSecret = process.env.JWT_SECRET;
+if (process.env.NODE_ENV === 'production' && !configuredJwtSecret) {
+  throw new Error('JWT_SECRET must be configured in production.');
+}
+const JWT_SECRET = configuredJwtSecret || 'dhruv-star-academy-secret-key-2026';
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];

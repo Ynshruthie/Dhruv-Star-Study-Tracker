@@ -25,3 +25,32 @@ api.interceptors.request.use((config) => {
 });
 
 export default api;
+
+export const uploadStudyPhotos = async (hourNumber, files, date) => {
+  const payload = {
+    date,
+    files: files.map((file) => ({ name: file.name, type: file.type, size: file.size }))
+  };
+  const { data: ticket } = await api.post(`/study/slots/${hourNumber}/upload`, payload);
+  const paths = [];
+
+  for (let index = 0; index < files.length; index += 1) {
+    const upload = ticket.uploads[index];
+    const response = await fetch(upload.signed_url, {
+      method: 'PUT',
+      headers: {
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        'Content-Type': files[index].type,
+        'x-upsert': 'false'
+      },
+      body: files[index]
+    });
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || 'A photo could not be uploaded.');
+    }
+    paths.push(upload.path);
+  }
+
+  return api.post(`/study/slots/${hourNumber}/upload/complete`, { date, paths });
+};

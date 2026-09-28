@@ -88,11 +88,6 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const triggerSeed = async () => {
-    await api.post('/seed');
-    await checkAuth();
-  };
-
   return (
     <AuthContext.Provider value={{
       user,
@@ -101,7 +96,6 @@ export const AuthProvider = ({ children }) => {
       logout,
       simulatedTime,
       setSimulatedTime,
-      triggerSeed,
       refreshUser: checkAuth
     }}>
       {children}

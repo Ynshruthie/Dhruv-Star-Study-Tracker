@@ -87,15 +87,18 @@ Keep both files private and do not commit them to a public repository. If you ne
 
 The frontend is configured as a Progressive Web App (PWA). Once deployed over HTTPS, open it in a browser and use **Install app** (desktop) or **Add to Home Screen** (mobile) to install it.
 
-The frontend can be deployed to GitHub Pages by the included Actions workflow. GitHub Pages only hosts static files, so the Express backend and its database must remain on a separate host.
+The frontend is deployed to GitHub Pages. The API can run as a Supabase Edge Function, so no separate Express host is required. The Edge Function uses the existing Supabase database and Storage bucket.
 
-Before the first deployment:
+Before switching the live frontend to the Supabase API:
 
-1. Confirm `frontend/.env.production` contains the public HTTPS backend API URL, including `/api`.
-2. In **Settings > Pages**, set the build and deployment source to **GitHub Actions**.
-3. Push to `main` or `Shruthi`, or manually run **Deploy frontend to GitHub Pages** from the Actions tab.
+1. Run `supabase/migrations/20260928_limit_study_photo_uploads.sql` in the Supabase SQL Editor to make the photo bucket private and cap proof images at 5 MB each.
+2. In Supabase **Project Settings > Edge Functions > Secrets**, add the existing `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, and `TEACHER_INVITE_CODE` values from `backend/.env`, plus `FRONTEND_ORIGIN=https://ynshruthie.github.io`. Supabase supplies `SUPABASE_URL`.
+4. In GitHub **Settings > Secrets and variables > Actions > Variables**, add `VITE_SUPABASE_ANON_KEY` with the Supabase anon/public key. This key is designed for browser use; never add the service-role key as a Vite variable.
+5. Create a Supabase personal access token, then add it in GitHub **Settings > Secrets and variables > Actions > Secrets** as `SUPABASE_ACCESS_TOKEN`.
+6. In GitHub **Settings > Pages**, set the source to **GitHub Actions**.
+7. Push to `main` or `Shruthi`. The workflow deploys `supabase/functions/api`, checks its health, then publishes the frontend configured in `frontend/.env.production`.
 
-The workflow builds `frontend` and deploys it at `https://ynshruthie.github.io/Dhruv-Star-Study-Tracker/`. The backend must allow browser requests from that origin. For local builds, set `VITE_API_URL` in `frontend/.env.production` as described in `frontend/.env.production.example`.
+The site is `https://ynshruthie.github.io/Dhruv-Star-Study-Tracker/`. Keep the Supabase service-role key and JWT secret server-side. Proof images use private Storage with one-hour signed viewing URLs; the SQL migration removes the app's previous public read/upload policies.
 
 ---
 

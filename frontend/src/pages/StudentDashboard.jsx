@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../context/AuthContextDefinition';
-import api from '../utils/api';
+import api, { uploadStudyPhotos } from '../utils/api';
 import ImageModal from '../components/ImageModal';
 import { AlertCircle, BookOpen, Calendar, CalendarClock, CheckCircle2, Clock3, ImagePlus, LockKeyhole, Play, Save, ThumbsUp, Timer, Upload } from 'lucide-react';
 
@@ -263,13 +263,11 @@ export const StudentDashboard = () => {
     setMessage('');
     setError('');
     try {
-      const formData = new FormData();
-      files.forEach((file) => formData.append('images', file));
-      const { data } = await api.post(`/study/slots/${hourNumber}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const { data } = await uploadStudyPhotos(hourNumber, files);
       setMessage(`Uploaded ${data.hour.photo_count} photo${data.hour.photo_count === 1 ? '' : 's'} for Slot ${hourNumber}.`);
       await fetchToday();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to upload photos.');
+      setError(err.response?.data?.error || err.message || 'Failed to upload photos.');
     } finally {
       setUploadingHour(null);
     }

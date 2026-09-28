@@ -1,6 +1,6 @@
 import React, { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { AuthContext } from '../context/AuthContextDefinition';
-import api from '../utils/api';
+import api, { uploadStudyPhotos } from '../utils/api';
 import ImageModal from '../components/ImageModal';
 import { AlertCircle, Calendar, CalendarClock, CheckCircle2, Clock3, ImagePlus, Upload, Users } from 'lucide-react';
 
@@ -123,18 +123,12 @@ export const ParentDashboard = () => {
     setMessage('');
 
     try {
-      const formData = new FormData();
-      files.forEach((file) => formData.append('images', file));
-      formData.append('date', slotDate);
-
-      const { data } = await api.post(`/study/slots/${hourNumber}/upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const { data } = await uploadStudyPhotos(hourNumber, files, slotDate);
 
       setMessage(`Parent uploaded ${data.hour.photo_count} photo${data.hour.photo_count > 1 ? 's' : ''} for the ${slotDate} Slot ${hourNumber}.`);
       await fetchWeeklyStudy();
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to upload parent photos.');
+      setError(err.response?.data?.error || err.message || 'Failed to upload parent photos.');
     } finally {
       setUploadingHour(null);
     }

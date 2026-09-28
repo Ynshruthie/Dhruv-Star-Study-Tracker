@@ -81,13 +81,4 @@ CREATE TABLE IF NOT EXISTS study_hours (
 
 -- 5. Storage Buckets (Run this if you haven't created the bucket yet)
 -- Note: You might need to create the bucket 'study-photos' manually via the Supabase Dashboard UI if this fails.
-INSERT INTO storage.buckets (id, name, public) VALUES ('study-photos', 'study-photos', true) ON CONFLICT DO NOTHING;
-
--- Allow public access to the bucket
--- Policies live in Supabase's shared storage schema, so they can remain even
--- after this app's tables are deleted. Drop them first to keep this script
--- safe to run repeatedly.
-DROP POLICY IF EXISTS "Public Access" ON storage.objects;
-DROP POLICY IF EXISTS "Auth Insert" ON storage.objects;
-CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'study-photos');
-CREATE POLICY "Auth Insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'study-photos');
+INSERT INTO storage.buckets (id, name, public) VALUES ('study-photos', 'study-photos', false) ON CONFLICT (id) DO UPDATE SET public = false;
