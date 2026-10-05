@@ -405,7 +405,12 @@ export const TeacherDashboard = () => {
                           <div className="text-emerald-700">{startedSlots} self slot{startedSlots === 1 ? '' : 's'} started</div>
                           {missedSlots > 0 && <div className="text-rose-600">{missedSlots} start window{missedSlots === 1 ? '' : 's'} missed</div>}
                           {parentSlots > 0 && <div className="text-violet-700">{parentSlots} parent-managed</div>}
-                          {!startedSlots && !missedSlots && !parentSlots && <div className="text-slate-500">No slots scheduled</div>}
+                          {!startedSlots && !missedSlots && !parentSlots && st.next_booking_date && (
+                            <div className="text-blue-700">
+                              {Object.keys(st.next_booking_hours || {}).length} slots booked for {formatBookingDate(st.next_booking_date)}
+                            </div>
+                          )}
+                          {!startedSlots && !missedSlots && !parentSlots && !st.next_booking_date && <div className="text-slate-500">No slots scheduled</div>}
                         </div>
                       </td>
 
