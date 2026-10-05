@@ -19,27 +19,27 @@ export const FamilyDashboard = () => {
         <button
           type="button"
           onClick={() => switchTab('parent')}
-          className={`justify-center px-2 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 sm:gap-2 transition ${
+          className={`justify-center px-1.5 sm:px-4 py-2.5 rounded-xl text-[10px] sm:text-sm font-semibold flex items-center gap-1 sm:gap-2 whitespace-nowrap transition ${
             activeTab === 'parent'
               ? 'bg-amber-600 text-white shadow-sm'
               : 'bg-white text-slate-600 hover:bg-slate-50'
           }`}
         >
           <Users className="w-4 h-4" />
-          <span><span className="sm:hidden">Parent</span><span className="hidden sm:inline">Parent Dashboard</span></span>
+          <span>Parent Dashboard</span>
         </button>
 
         <button
           type="button"
           onClick={() => switchTab('student')}
-          className={`justify-center px-2 sm:px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-1.5 sm:gap-2 transition ${
+          className={`justify-center px-1.5 sm:px-4 py-2.5 rounded-xl text-[10px] sm:text-sm font-semibold flex items-center gap-1 sm:gap-2 whitespace-nowrap transition ${
             activeTab === 'student'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'bg-white text-slate-600 hover:bg-slate-50'
           }`}
         >
           <BookOpen className="w-4 h-4" />
-          <span><span className="sm:hidden">Student</span><span className="hidden sm:inline">Student Dashboard</span></span>
+          <span>Student Dashboard</span>
         </button>
       </div>
 

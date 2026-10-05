@@ -32,20 +32,20 @@ export const Navbar = () => {
     <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm px-3 sm:px-4 lg:px-8 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4">
         {/* Brand Header */}
-        <div className="min-w-0 flex items-center gap-2 sm:gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center p-0.5 shadow-sm shrink-0">
+        <div className="min-w-0 flex flex-1 items-center gap-2 sm:gap-3">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-white border border-slate-200 overflow-hidden flex items-center justify-center p-0.5 shadow-sm shrink-0">
             <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Dhruv Star Academy Logo" className="w-full h-full object-contain" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="truncate text-sm sm:text-lg font-bold text-slate-900 tracking-tight">
-                DHRUV STAR <span className="hidden text-blue-600 font-semibold sm:inline">ACADEMY</span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+              <h1 className="whitespace-nowrap text-[11px] sm:text-lg font-bold text-slate-900 tracking-tight">
+                DHRUV STAR <span className="text-blue-600 font-semibold">ACADEMY</span>
               </h1>
-              <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider hidden sm:inline-block">
+              <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                 Study Tracker
               </span>
             </div>
-            <p className="text-xs text-slate-500 hidden sm:block">Daily Attendance &amp; Self-Study Monitoring System</p>
+            <p className="text-[9px] leading-tight sm:text-xs text-slate-500">Daily Attendance &amp; Self-Study Monitoring System</p>
           </div>
         </div>
 
