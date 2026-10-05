@@ -105,6 +105,7 @@ export const StudentDashboard = () => {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [uploadingHour, setUploadingHour] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [markingHour, setMarkingHour] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
   const [now, setNow] = useState(Date.now());
@@ -260,16 +261,18 @@ export const StudentDashboard = () => {
     const files = Array.from(fileList || []);
     if (!files.length) return;
     setUploadingHour(hourNumber);
+    setUploadProgress(0);
     setMessage('');
     setError('');
     try {
-      const { data } = await uploadStudyPhotos(hourNumber, files);
+      const { data } = await uploadStudyPhotos(hourNumber, files, undefined, setUploadProgress);
       setMessage(`Uploaded ${data.hour.photo_count} photo${data.hour.photo_count === 1 ? '' : 's'} for Slot ${hourNumber}.`);
       await fetchToday();
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to upload photos.');
     } finally {
       setUploadingHour(null);
+      setUploadProgress(0);
     }
   };
 
@@ -363,7 +366,7 @@ export const StudentDashboard = () => {
             {selfManaged && hour.study_warning && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-center gap-2"><Timer className="w-4 h-4 shrink-0" /><span><strong>{hour.study_remaining_minutes} minutes left</strong> to complete this one-hour study session.</span></div>}
             {selfManaged && hour.attendance_status === 'PRESENT' && !canUpload && hour.study_remaining_minutes != null && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-800">Study in progress. Photo upload opens after your session ends.</div>}
             {selfManaged && canUpload && <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 flex items-center gap-2"><Timer className="w-4 h-4 shrink-0" /><span>Upload time remaining: <strong className="font-mono">{formatCountdown(uploadCountdownSeconds)}</strong></span></div>}
-            {selfManaged && !unscheduled && <label className={`w-full border-2 border-dashed rounded-xl px-4 py-4 flex flex-col items-center justify-center gap-2 text-center ${canUpload ? 'border-blue-300 bg-blue-50 cursor-pointer' : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'}`}><Upload className="w-5 h-5" /><span className="text-sm font-semibold">{uploadingHour === hour.hour_number ? 'Uploading...' : 'Upload Slot Photos'}</span><span className="text-xs">{canUpload ? `Upload before ${hour.upload_window_end}.` : 'Available for 15 minutes after the study session ends.'}</span><input type="file" accept="image/*" multiple disabled={!canUpload || uploadingHour === hour.hour_number} onChange={(event) => handleUpload(hour.hour_number, event.target.files)} className="hidden" /></label>}
+            {selfManaged && !unscheduled && <label className={`w-full border-2 border-dashed rounded-xl px-4 py-4 flex flex-col items-center justify-center gap-2 text-center ${canUpload ? 'border-blue-300 bg-blue-50 cursor-pointer' : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'}`}><Upload className="w-5 h-5" /><span className="text-sm font-semibold">{uploadingHour === hour.hour_number ? 'Uploading photos...' : 'Upload Slot Photos'}</span><span className="text-xs">{canUpload ? `Upload before ${hour.upload_window_end}.` : 'Available for 15 minutes after the study session ends.'}</span>{uploadingHour === hour.hour_number && <><span className="text-xs font-semibold text-blue-700">{uploadProgress < 100 ? `${uploadProgress}% uploaded` : 'Saving photos...'}</span><div role="progressbar" aria-label={`Photo upload progress for Slot ${hour.hour_number}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={uploadProgress} className="h-2 w-full max-w-xs overflow-hidden rounded-full bg-blue-100"><div className="h-full rounded-full bg-blue-600 transition-[width] duration-150" style={{ width: `${uploadProgress}%` }} /></div></>}<input type="file" accept="image/*" multiple disabled={!canUpload || uploadingHour === hour.hour_number} onChange={(event) => handleUpload(hour.hour_number, event.target.files)} className="hidden" /></label>}
             {!selfManaged && !unscheduled && <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">This parent-managed slot is completed from the Parent Dashboard.</div>}
             {hour.image_urls?.length > 0 && <div className="flex flex-wrap gap-2">{hour.image_urls.map((imageUrl, index) => <button type="button" key={`${hour.hour_number}-${index}`} onClick={() => setSelectedImage(hour)} className="w-16 h-16 rounded-lg overflow-hidden border border-slate-200"><img src={imageUrl} alt={`Slot ${hour.hour_number} proof ${index + 1}`} className="w-full h-full object-cover" /></button>)}</div>}
           </div>;
