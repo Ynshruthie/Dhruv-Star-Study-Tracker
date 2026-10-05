@@ -57,7 +57,7 @@ Keep both files private and do not commit them to a public repository. If you ne
 ### Student Module
 - **Morning Attendance** — 4:30 AM–5:30 AM strict window (server + client enforced)
 - **4-Hour Daily Self-Study Tracker** — 2 Morning + 2 Night sessions with subject, time range & photo proof upload
-- **Weekly Slot Booking** — students book the upcoming Monday–Saturday plan on Sunday, or any day when a teacher opens booking
+- **Weekly Slot Booking** — students book the upcoming Monday–Saturday plan on Sunday, or the current week when a teacher opens booking
 - Single submission allowed per day; confetti celebration on completion
 
 ### Teacher Dashboard

@@ -75,10 +75,17 @@ const dateObj = (value: string) =>
     ? new Date(`${value}T00:00:00Z`)
     : null;
 const dateString = (d: Date) => d.toISOString().slice(0, 10);
-const nextBookingMonday = () => {
+const bookingWeekMonday = (bookingOpen: boolean) => {
   const monday = dateObj(today())!;
-  const daysUntilMonday = (8 - monday.getUTCDay()) % 7 || 7;
-  monday.setUTCDate(monday.getUTCDate() + daysUntilMonday);
+  const day = monday.getUTCDay();
+  if (day === 0) {
+    monday.setUTCDate(monday.getUTCDate() + 1);
+  } else if (bookingOpen) {
+    monday.setUTCDate(monday.getUTCDate() - ((day + 6) % 7));
+  } else {
+    const daysUntilMonday = (8 - day) % 7 || 7;
+    monday.setUTCDate(monday.getUTCDate() + daysUntilMonday);
+  }
   return monday;
 };
 const getWeekDates = (start: Date) =>
@@ -533,7 +540,7 @@ Deno.serve(async (req: Request) => {
         week_start: start,
         dates,
         by_date,
-        booking_open: bookingOpen || new Date(`${today()}T12:00:00+05:30`).getDay() === 0,
+        booking_open: bookingOpen,
       });
     }
     if (method === "POST" && path === "/study/schedule/day") {
@@ -541,15 +548,16 @@ Deno.serve(async (req: Request) => {
         return fail("Only students can create daily study plans.", 403);
       }
       const currentDate = new Date(`${today()}T12:00:00+05:30`);
-      if (currentDate.getDay() !== 0 && !(await getBookingOpen())) {
+      const bookingOpen = await getBookingOpen();
+      if (currentDate.getDay() !== 0 && !bookingOpen) {
         return fail("Daily slot booking is available on Sundays only.", 403);
       }
       const target = dateObj(body.date);
-      const nextMonday = nextBookingMonday();
-      const allowed = getWeekDates(nextMonday);
+      const bookingMonday = bookingWeekMonday(bookingOpen);
+      const allowed = getWeekDates(bookingMonday);
       if (!target || target.getUTCDay() === 0 || !allowed.includes(body.date)) {
         return fail(
-          "Choose a valid Monday–Saturday date in the upcoming week.",
+          "Choose a valid Monday–Saturday date in the open study week.",
         );
       }
       if (!Array.isArray(body.slots) || body.slots.length !== 4) {
