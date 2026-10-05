@@ -46,6 +46,8 @@ export const TeacherDashboard = () => {
   const [reviewDrafts, setReviewDrafts] = useState({});
   const [reviewMessages, setReviewMessages] = useState({});
   const [savingReviewId, setSavingReviewId] = useState(null);
+  const [bookingOpen, setBookingOpen] = useState(false);
+  const [savingBookingSetting, setSavingBookingSetting] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     setLoading(true);
@@ -62,6 +64,34 @@ export const TeacherDashboard = () => {
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
+
+  useEffect(() => {
+    const fetchBookingSettings = async () => {
+      try {
+        const { data: settings } = await api.get('/teacher/booking-settings');
+        setBookingOpen(settings.booking_open);
+      } catch (err) {
+        console.error('Failed to fetch student booking settings:', err);
+        setAdminMsg({ type: 'error', text: err.response?.data?.error || 'Failed to load student booking settings.' });
+      }
+    };
+
+    fetchBookingSettings();
+  }, []);
+
+  const handleBookingSettingChange = async (nextBookingOpen) => {
+    setSavingBookingSetting(true);
+    setAdminMsg(null);
+    try {
+      const { data: settings } = await api.put('/teacher/booking-settings', { booking_open: nextBookingOpen });
+      setBookingOpen(settings.booking_open);
+      setAdminMsg({ type: 'success', text: settings.message });
+    } catch (err) {
+      setAdminMsg({ type: 'error', text: err.response?.data?.error || 'Failed to update student booking settings.' });
+    } finally {
+      setSavingBookingSetting(false);
+    }
+  };
 
   const handleAddStudent = async (e) => {
     e.preventDefault();
@@ -529,6 +559,24 @@ export const TeacherDashboard = () => {
             <div><h1 className="text-xl font-extrabold text-slate-900">Admin Dashboard</h1><p className="text-sm text-slate-500">Add students and manage the enrolled student roster.</p></div>
           </div>
           <div className="p-5 space-y-6">
+
+            <section className="rounded-xl border border-purple-200 bg-purple-50/60 p-4 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Open slots booking</h2>
+                <p className="mt-1 text-xs text-slate-600">When enabled, all students can book the upcoming study week any day. When disabled, booking is available on Sundays as usual.</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={bookingOpen}
+                aria-label="Open slots booking for all students"
+                disabled={savingBookingSetting}
+                onClick={() => handleBookingSettingChange(!bookingOpen)}
+                className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition disabled:cursor-wait disabled:opacity-60 ${bookingOpen ? 'bg-purple-600' : 'bg-slate-300'}`}
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${bookingOpen ? 'translate-x-6' : 'translate-x-1'}`} />
+              </button>
+            </section>
 
             {/* Success / Error Message */}
             {adminMsg && (

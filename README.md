@@ -57,12 +57,14 @@ Keep both files private and do not commit them to a public repository. If you ne
 ### Student Module
 - **Morning Attendance** — 4:30 AM–5:30 AM strict window (server + client enforced)
 - **4-Hour Daily Self-Study Tracker** — 2 Morning + 2 Night sessions with subject, time range & photo proof upload
+- **Weekly Slot Booking** — students book the upcoming Monday–Saturday plan on Sunday, or any day when a teacher opens booking
 - Single submission allowed per day; confetti celebration on completion
 
 ### Teacher Dashboard
 - **Live Metrics** — Total enrolled, attendance marked, 4/4 submitted, pending, absent
 - **Interactive Data Table** — All students with per-hour proof image thumbnails
 - **Search & Filter** — Filter by Submitted, Pending, or Absent status
+- **Booking Window Control** — open or close upcoming-week slot booking for all students
 - **Lightbox Inspector** — Click any study proof photo to view full resolution
 
 ### Demo Mode
@@ -91,7 +93,7 @@ The frontend is deployed to GitHub Pages. The API can run as a Supabase Edge Fun
 
 Before switching the live frontend to the Supabase API:
 
-1. Run `supabase/migrations/20260928_limit_study_photo_uploads.sql` if not already applied, then run `supabase/migrations/20260928_study_photo_upload_expiry.sql` in the Supabase SQL Editor. The expiry migration backfills existing photos using Storage upload timestamps.
+1. Run `supabase/migrations/20260928_limit_study_photo_uploads.sql` if not already applied, then run `supabase/migrations/20260928_study_photo_upload_expiry.sql` and `supabase/migrations/20261005_add_booking_settings.sql` in the Supabase SQL Editor. The expiry migration backfills existing photos using Storage upload timestamps; the booking settings migration creates the teacher-controlled student booking window.
 2. In Supabase **Project Settings > Edge Functions > Secrets**, add the existing `JWT_SECRET` and `TEACHER_INVITE_CODE` values from `backend/.env`, plus `FRONTEND_ORIGIN=https://ynshruthie.github.io`. Supabase provides `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` automatically.
 3. In GitHub **Settings > Secrets and variables > Actions > Variables**, add `VITE_SUPABASE_ANON_KEY` with the Supabase anon/public key. Never add the service-role key as a Vite variable.
 4. Create a Supabase personal access token, then add it in GitHub **Settings > Secrets and variables > Actions > Secrets** as `SUPABASE_ACCESS_TOKEN`.

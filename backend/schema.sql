@@ -32,6 +32,17 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS users_mentor_idx ON users(mentor);
 
+-- 1b. Global teacher-controlled student booking window
+CREATE TABLE IF NOT EXISTS booking_settings (
+  id TEXT PRIMARY KEY CHECK (id = 'global'),
+  booking_open BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO booking_settings (id, booking_open)
+VALUES ('global', FALSE)
+ON CONFLICT (id) DO NOTHING;
+
 -- 2. Attendance Table
 CREATE TABLE IF NOT EXISTS attendance (
   id SERIAL PRIMARY KEY,

@@ -75,6 +75,12 @@ const dateObj = (value: string) =>
     ? new Date(`${value}T00:00:00Z`)
     : null;
 const dateString = (d: Date) => d.toISOString().slice(0, 10);
+const nextBookingMonday = () => {
+  const monday = dateObj(today())!;
+  const daysUntilMonday = (8 - monday.getUTCDay()) % 7 || 7;
+  monday.setUTCDate(monday.getUTCDate() + daysUntilMonday);
+  return monday;
+};
 const getWeekDates = (start: Date) =>
   Array.from({ length: 6 }, (_, i) => {
     const d = new Date(start);
@@ -268,6 +274,13 @@ const getMentor = async (value: string) => {
   ).eq("role", "teacher").maybeSingle();
   if (!data) throw new Error(`Mentor ID "${id}" was not found.`);
   return data.student_id;
+};
+const getBookingOpen = async () => {
+  const { data, error } = await supabase.from("booking_settings").select(
+    "booking_open",
+  ).eq("id", "global").maybeSingle();
+  if (error) throw error;
+  return !!data?.booking_open;
 };
 
 const cleanupExpiredPhotos = async () => {
@@ -515,19 +528,24 @@ Deno.serve(async (req: Request) => {
         hour: await sendHour(row, clock.minutes),
       })));
       for (const row of formattedRows) by_date[row.date].push(row.hour);
-      return respond({ week_start: start, dates, by_date });
+      const bookingOpen = await getBookingOpen();
+      return respond({
+        week_start: start,
+        dates,
+        by_date,
+        booking_open: bookingOpen || new Date(`${today()}T12:00:00+05:30`).getDay() === 0,
+      });
     }
     if (method === "POST" && path === "/study/schedule/day") {
       if (user.role !== "student") {
         return fail("Only students can create daily study plans.", 403);
       }
       const currentDate = new Date(`${today()}T12:00:00+05:30`);
-      if (currentDate.getDay() !== 0) {
+      if (currentDate.getDay() !== 0 && !(await getBookingOpen())) {
         return fail("Daily slot booking is available on Sundays only.", 403);
       }
       const target = dateObj(body.date);
-      const nextMonday = new Date(`${today()}T12:00:00+05:30`);
-      nextMonday.setDate(nextMonday.getDate() + 1);
+      const nextMonday = nextBookingMonday();
       const allowed = getWeekDates(nextMonday);
       if (!target || target.getUTCDay() === 0 || !allowed.includes(body.date)) {
         return fail(
@@ -778,6 +796,26 @@ Deno.serve(async (req: Request) => {
     if (path.startsWith("/teacher/")) {
       if (!requireTeacher(user)) {
         return fail("Access denied. Requires teacher role.", 403);
+      }
+      if (path === "/teacher/booking-settings" && method === "GET") {
+        return respond({ booking_open: await getBookingOpen() });
+      }
+      if (path === "/teacher/booking-settings" && method === "PUT") {
+        if (typeof body.booking_open !== "boolean") {
+          return fail("booking_open must be a boolean.");
+        }
+        const { data, error } = await supabase.from("booking_settings").upsert({
+          id: "global",
+          booking_open: body.booking_open,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "id" }).select("booking_open").single();
+        if (error) throw error;
+        return respond({
+          message: data.booking_open
+            ? "Student slot booking is open."
+            : "Student slot booking is limited to Sundays.",
+          booking_open: data.booking_open,
+        });
       }
       if (method === "GET" && path === "/teacher/dashboard") {
         const reportDate = url.searchParams.get("date") || today();

@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { supabase } = require('../db');
+const { getBookingOpen, setBookingOpen } = require('../bookingSettings');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
@@ -39,6 +40,30 @@ const formatHHMM = (value) => {
 };
 
 const formatTimeRange = (start, end) => `${formatHHMM(start)} – ${formatHHMM(end)}`;
+
+router.get('/booking-settings', authenticateToken, requireRole('teacher'), async (req, res) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    res.json({ booking_open: await getBookingOpen() });
+  } catch (err) {
+    console.error('Error fetching booking settings:', err);
+    res.status(500).json({ error: 'Failed to fetch booking settings.' });
+  }
+});
+
+router.put('/booking-settings', authenticateToken, requireRole('teacher'), async (req, res) => {
+  try {
+    if (typeof req.body.booking_open !== 'boolean') {
+      return res.status(400).json({ error: 'booking_open must be a boolean.' });
+    }
+
+    const bookingOpen = await setBookingOpen(req.body.booking_open);
+    res.json({ message: bookingOpen ? 'Student slot booking is open.' : 'Student slot booking is limited to Sundays.', booking_open: bookingOpen });
+  } catch (err) {
+    console.error('Error updating booking settings:', err);
+    res.status(500).json({ error: 'Failed to update booking settings.' });
+  }
+});
 
 // A mentor is always another teacher account, stored by its login ID rather
 // than a free-form display name.

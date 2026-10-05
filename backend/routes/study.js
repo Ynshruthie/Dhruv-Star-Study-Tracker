@@ -1,6 +1,7 @@
 const express = require('express');
 const upload = require('../middleware/upload');
 const { supabase } = require('../db');
+const { getBookingOpen } = require('../bookingSettings');
 const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
@@ -403,7 +404,9 @@ router.get('/week', authenticateToken, async (req, res) => {
       }
     });
 
-    res.json({ week_start, dates, by_date: byDate });
+    const bookingOpen = await getBookingOpen();
+    res.set('Cache-Control', 'no-store');
+    res.json({ week_start, dates, by_date: byDate, booking_open: bookingOpen || new Date().getDay() === 0 });
   } catch (err) {
     console.error('Error fetching week data:', err);
     res.status(500).json({ error: 'Failed to fetch week data.' });
@@ -419,9 +422,8 @@ router.post('/schedule/day', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Only students can create daily study plans.' });
     }
 
-    // All six daily plans are prepared on Sunday. Enforcing this on the
-    // server prevents clients from bypassing the disabled booking UI.
-    if (new Date().getDay() !== 0) {
+    // Enforce the teacher-controlled booking window server-side as well as in the UI.
+    if (new Date().getDay() !== 0 && !(await getBookingOpen())) {
       return res.status(403).json({ error: 'Daily slot booking is available on Sundays only.' });
     }
 
@@ -432,7 +434,8 @@ router.post('/schedule/day', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Choose a valid Monday–Saturday date.' });
     }
     const expectedWeekStart = new Date();
-    expectedWeekStart.setDate(expectedWeekStart.getDate() + 1);
+    const daysUntilNextMonday = (8 - expectedWeekStart.getDay()) % 7 || 7;
+    expectedWeekStart.setDate(expectedWeekStart.getDate() + daysUntilNextMonday);
     const allowedDates = getWeekDates(expectedWeekStart);
     if (!allowedDates.includes(date)) {
       return res.status(400).json({ error: `Book slots for the upcoming week starting ${formatDate(expectedWeekStart)}.` });
@@ -515,12 +518,13 @@ router.post('/schedule', authenticateToken, async (req, res) => {
 
     const student_id = req.user.student_id;
     const today = new Date();
-    if (today.getDay() !== 0) {
+    if (today.getDay() !== 0 && !(await getBookingOpen())) {
       return res.status(403).json({ error: 'Weekly slot booking is available on Sundays only.' });
     }
 
     const expectedWeekStart = new Date(today);
-    expectedWeekStart.setDate(today.getDate() + 1);
+    const daysUntilNextMonday = (8 - today.getDay()) % 7 || 7;
+    expectedWeekStart.setDate(today.getDate() + daysUntilNextMonday);
     const requestedWeekStart = parseDate(req.body.week_start);
     if (!requestedWeekStart || formatDate(requestedWeekStart) !== formatDate(expectedWeekStart)) {
       return res.status(400).json({ error: `Book slots for the upcoming week starting ${formatDate(expectedWeekStart)}.` });
